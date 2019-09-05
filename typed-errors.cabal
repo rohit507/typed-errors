@@ -4,10 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 42ed04f8374d377dab984d08af81b532fb1d3c2dc38697c213574c690544f7f7
+-- hash: 24b2d72b28d55486ebb3fcd1970f4e2942f17c4b761003125bf5f859d90c2083
 
 name:           typed-errors
-version:        0.1.0.0
+version:        0.0.1.0
+synopsis:       Create type-classes and datatypes for rich errors.
 category:       Error Handling
 homepage:       https://github.com/rohit507/typed-errors#readme
 author:         Rohit Ramesh
@@ -19,12 +20,43 @@ build-type:     Simple
 extra-source-files:
     README.md
 
-executable typed-errors
-  main-is: Main.hs
+library
+  exposed-modules:
+      HigherOrder
+      Scratchpad
+      Type.Set.VariantF
   other-modules:
       Paths_typed_errors
   hs-source-dirs:
       src
+  default-extensions: NoImplicitPrelude ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DuplicateRecordFields EmptyCase EmptyDataDecls ExistentialQuantification ExtendedDefaultRules FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving ImplicitParams InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns NoImplicitPrelude NoMonomorphismRestriction OverloadedLabels OverloadedLists OverloadedStrings PackageImports PatternSynonyms PolyKinds QuasiQuotes QuantifiedConstraints RankNTypes RecordWildCards RecursiveDo ScopedTypeVariables StandaloneDeriving TemplateHaskell TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
+  ghc-options: -fplugin=Type.Compare.Plugin -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Werror -Wwarn=name-shadowing -Wwarn=orphans -Wwarn=redundant-constraints -Wwarn=typed-holes -Wwarn=unused-matches -Wwarn=deprecations -Wwarn=unused-local-binds -Wwarn=unused-imports -Wwarn=redundant-constraints
   build-depends:
       base >=4.7 && <5
+    , cmptype
+    , constraints >=0.10 && <1
+    , intro
+    , template-haskell
+    , text
+    , type-sets
+  default-language: Haskell2010
+
+test-suite experiments
+  type: exitcode-stdio-1.0
+  main-is: Experiments.hs
+  other-modules:
+      Paths_typed_errors
+  hs-source-dirs:
+      test
+  default-extensions: NoImplicitPrelude ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DuplicateRecordFields EmptyCase EmptyDataDecls ExistentialQuantification ExtendedDefaultRules FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving ImplicitParams InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns NoImplicitPrelude NoMonomorphismRestriction OverloadedLabels OverloadedLists OverloadedStrings PackageImports PatternSynonyms PolyKinds QuasiQuotes QuantifiedConstraints RankNTypes RecordWildCards RecursiveDo ScopedTypeVariables StandaloneDeriving TemplateHaskell TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
+  ghc-options: -fplugin=Type.Compare.Plugin -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Werror -Wwarn=name-shadowing -Wwarn=orphans -Wwarn=redundant-constraints -Wwarn=typed-holes -Wwarn=unused-matches -Wwarn=deprecations -Wwarn=unused-local-binds -Wwarn=unused-imports -Wwarn=redundant-constraints -Wwarn=type-defaults
+  build-depends:
+      base >=4.7 && <5
+    , cmptype
+    , constraints >=0.10 && <1
+    , intro
+    , template-haskell
+    , text
+    , type-sets
+    , typed-errors
   default-language: Haskell2010

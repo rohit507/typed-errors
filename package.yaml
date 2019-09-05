@@ -1,7 +1,7 @@
 name:                typed-errors
-version:             0.1.0.0
-#synopsis:
-#description:
+version:             0.0.1.0
+synopsis:            Create type-classes and datatypes for rich errors.
+# description:
 homepage:            https://github.com/rohit507/typed-errors#readme
 license:             BSD3
 author:              Rohit Ramesh
@@ -13,8 +13,103 @@ extra-source-files:
 
 dependencies:
   - base >= 4.7 && < 5
+  - intro
+  - text
+  - template-haskell
+  - cmptype
+  - constraints >= 0.10 && < 1
+  - type-sets
 
-executables:
-  typed-errors:
-    source-dirs:      src
-    main:             Main.hs
+# custom-setup:
+#   dependencies:
+#     - base
+#     - cmptype
+#     - Cabal
+
+library:
+  source-dirs:      src
+
+tests:
+  experiments:
+    main: Experiments.hs
+    source-dirs:
+      - test
+    dependencies:
+      - typed-errors
+    ghc-options:
+      - -Wwarn=type-defaults
+
+default-extensions:
+  NoImplicitPrelude
+  ApplicativeDo
+  BangPatterns
+  ConstraintKinds
+  DataKinds
+  DefaultSignatures
+  DeriveDataTypeable
+  DeriveFoldable
+  DeriveFunctor
+  DeriveGeneric
+  DeriveLift
+  DeriveTraversable
+  DerivingStrategies
+  DuplicateRecordFields
+  EmptyCase
+  EmptyDataDecls
+  ExistentialQuantification
+  ExtendedDefaultRules
+  FlexibleContexts
+  FlexibleInstances
+  FunctionalDependencies
+  GADTs
+  GeneralizedNewtypeDeriving
+  ImplicitParams
+  InstanceSigs
+  KindSignatures
+  LambdaCase
+  MultiParamTypeClasses
+  MultiWayIf
+  NamedFieldPuns
+  NoImplicitPrelude
+  NoMonomorphismRestriction
+  OverloadedLabels
+  OverloadedLists
+  OverloadedStrings
+  PackageImports
+  PatternSynonyms
+  PolyKinds
+  QuasiQuotes
+  QuantifiedConstraints
+  RankNTypes
+  RecordWildCards
+  RecursiveDo
+  ScopedTypeVariables
+  StandaloneDeriving
+  TemplateHaskell
+  TupleSections
+  TypeApplications
+  TypeFamilies
+  TypeFamilyDependencies
+  TypeOperators
+  ViewPatterns
+
+ghc-options:
+  - -fplugin=Type.Compare.Plugin
+  - -Wall
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+  - -Werror
+  # Some of the flags enabled by Wall and propmoted by Werror really should
+  # only be warnings when developing. A proper build on the other hand should
+  # have no warnings attached
+  - -Wwarn=name-shadowing
+  - -Wwarn=orphans
+  - -Wwarn=redundant-constraints
+  - -Wwarn=typed-holes
+  - -Wwarn=unused-matches
+  - -Wwarn=deprecations
+  - -Wwarn=unused-local-binds    # TODO :: Re-enable for cleaning
+  - -Wwarn=unused-imports        # TODO :: Re-enable for cleaning
+  - -Wwarn=redundant-constraints # TODO :: Re-enable for cleaning
