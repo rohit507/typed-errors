@@ -28,6 +28,8 @@ dependencies:
 
 library:
   source-dirs:      src
+  reexported-modules:
+    - Type.Compare.Plugin
 
 tests:
   experiments:
