@@ -1,0 +1,20 @@
+name:                typed-errors
+version:             0.1.0.0
+#synopsis:
+#description:
+homepage:            https://github.com/rohit507/typed-errors#readme
+license:             BSD3
+author:              Rohit Ramesh
+maintainer:          rkr@berkeley.edu
+copyright:           2019 Rohit Ramesh
+category:            Error Handling
+extra-source-files:
+- README.md
+
+dependencies:
+  - base >= 4.7 && < 5
+
+executables:
+  typed-errors:
+    source-dirs:      src
+    main:             Main.hs
