@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
@@ -16,7 +17,7 @@ import Data.Functor.Classes
 import Data.Typeable
 import Text.Show
 import GHC.TypeLits
-import Exinst
+
 
 
 ------------------------------------------------------------------------------
@@ -24,7 +25,7 @@ import Exinst
 --   any of the 'Functor's within its 'TypeSet'. You can use 'toVariantF' to
 --   construct one, and 'fromVariantF' to pattern match it out.
 data VariantF (bst :: TypeSet (Type -> Type)) (a :: Type) where
-  VariantF :: (forall c. ForAllIn c bst => c (Follow ss bst))
+  VariantF :: (Functor (Follow ss bst))
     => SSide ss -> Follow ss bst a -> VariantF bst a
 type role VariantF nominal nominal
 
@@ -72,27 +73,35 @@ weakenF (VariantF (tag :: SSide ss) res) = VariantF (tag :: SSide ss) $
   case proveFollowInsertF @ss @f @bst of
     HRefl -> res :: Follow ss bst a
 
-type family ZipSides (ss :: [Side]) (f :: TypeSet k) (c :: k -> Constraint) :: Constraint where
-  ZipSides '[] ('Branch a _ _) c = c a
-  ZipSides (L ': ss) ('Branch _ l _) c = ZipSides ss l c
-  ZipSides (R ': ss) ('Branch _ _ r) c = ZipSides ss r c
-  ZipSides _ _ _ = TypeError ('Text "Member ss not found in tree")
 
-type family Map (c :: k -> k') (f :: kf k) :: kf k'
-type instance Map c 'Empty = 'Empty
-type instance Map c ('Branch a l r) = 'Branch (c a) (Map c l) (Map c r)
+type family AppendL (f :: [k]) (g :: [k]) :: [k] where
+  AppendL ('[] :: [k]) g = g
+  AppendL (l ': ls) g = l ': AppendL ls g
 
-type family Collect (f :: kf Constraint) :: Constraint
-type instance Collect 'Empty = ()
-type instance Collect ('Branch a l r) = (a, Collect l, Collect r)
+type family Paths (f :: TypeSet k) :: [[Side]] where
+  Paths 'Empty = '[]
+  Paths ('Branch a l r) = '[] ': (AppendL (PreMapL L (Paths l)) (PreMapL R (Paths r)))
 
-type family ForAllIn (c :: k -> Constraint) (f :: kf k) where
-  ForAllIn c t = Collect (Map c t)
+type family MembL (a :: k) (l :: [k]) :: Bool where
+  MembL a '[] = 'False
+  MembL a (a ': ls) = 'True
+  MembL b (l ': ls) = MembL b ls
+
+type family PreMapL (a :: k) (l :: [[k]]) :: [[k]] where
+  PreMapL a '[] = '[]
+  PreMapL a (l ': ls) = (a ': l) ': (PreMapL a ls)
+
+type family ConsFollowL (c :: k -> Constraint) (bst :: TypeSet k) (pl :: [[Side]]) :: Constraint where
+  ConsFollowL c bst '[] = ()
+  ConsFollowL c bst (ss ': sss) = (c (Follow ss bst), ConsFollowL c bst sss)
+
+type ForAllIn c bst = ConsFollowL c bst (Paths bst)
 
 instance (ForAllIn Functor bst) => Functor (VariantF bst) where
   fmap f (VariantF s r) = VariantF s (fmap f r)
 
 {-
+
 type family ForAllIn (c :: k -> Constraint) (bst :: c k) :: Constraint where
   ForAllIn c 'Empty = 'Empty
   ForAllIn c ('Branch a l r) = 'Branch (c a) (ForAllIn c l) (ForAllIn c r)
