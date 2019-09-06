@@ -1,10 +1,10 @@
-cabal-version: 1.12
+cabal-version: 1.22
 
 -- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 24b2d72b28d55486ebb3fcd1970f4e2942f17c4b761003125bf5f859d90c2083
+-- hash: 852de587f6cc146b557013e4118be283fe1e8337118a2ef4328773abaa7a10d5
 
 name:           typed-errors
 version:        0.0.1.0
@@ -27,6 +27,8 @@ library
       Type.Set.VariantF
   other-modules:
       Paths_typed_errors
+  reexported-modules:
+      Type.Compare.Plugin
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DuplicateRecordFields EmptyCase EmptyDataDecls ExistentialQuantification ExtendedDefaultRules FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving ImplicitParams InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns NoImplicitPrelude NoMonomorphismRestriction OverloadedLabels OverloadedLists OverloadedStrings PackageImports PatternSynonyms PolyKinds QuasiQuotes QuantifiedConstraints RankNTypes RecordWildCards RecursiveDo ScopedTypeVariables StandaloneDeriving TemplateHaskell TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
