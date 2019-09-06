@@ -12,17 +12,19 @@ import Type.Set.Variant
 import Data.Type.Equality
 import Unsafe.Coerce
 import Data.Constraint
-import Data.Constraint.Unsafe
 import Data.Functor.Classes
 import Data.Typeable
 import Text.Show
+import GHC.TypeLits
+import Exinst
+
 
 ------------------------------------------------------------------------------
 -- | A 'VariantF' is a higher-order version of 'Variant' which can contain
 --   any of the 'Functor's within its 'TypeSet'. You can use 'toVariantF' to
 --   construct one, and 'fromVariantF' to pattern match it out.
-data VariantF (f :: TypeSet (Type -> Type)) a where
-  VariantF :: SSide ss -> Follow ss f a -> VariantF f a
+data VariantF (bst :: TypeSet (Type -> Type)) (a :: Type) where
+  VariantF :: SSide ss -> Follow ss bst a -> VariantF bst a
 type role VariantF nominal nominal
 
 ------------------------------------------------------------------------------
@@ -37,6 +39,7 @@ class HasF f bst where
   fromVariantF :: VariantF bst a -> Maybe (f a)
 
 instance ( Follow (Locate f bst) bst ~ f
+         -- , Locate (Follow (Locate f bst) bst) bst ~ Locate f bst
          , FromSides (Locate f bst)
          ) => HasF f bst where
   toVariantF = VariantF (fromSides @(Locate f bst))
@@ -44,6 +47,16 @@ instance ( Follow (Locate f bst) bst ~ f
     case testEquality tag (fromSides @(Locate f bst)) of
       Just Refl -> Just res
       Nothing -> Nothing
+
+data SplitF f lbst rbst a
+  = RootF (f a)
+  | LSplitF (VariantF lbst a)
+  | RSplitF (VariantF rbst a)
+
+decompRootF :: VariantF ('Branch f lbst rbst) a -> SplitF f lbst rbst a
+decompRootF (VariantF SNil   t) = RootF t
+decompRootF (VariantF (SL s) t) = LSplitF (VariantF s t)
+decompRootF (VariantF (SR s) t) = RSplitF (VariantF s t)
 
 ------------------------------------------------------------------------------
 -- | A proof that inserting into a @bst@ doesn't affect the position of
@@ -54,9 +67,28 @@ proveFollowInsertF = unsafeCoerce HRefl
 ------------------------------------------------------------------------------
 -- | Weaken a 'VariantF' so that it can contain something else.
 weakenF :: forall f bst a. VariantF bst a -> VariantF (Insert f bst) a
-weakenF (VariantF (tag :: SSide ss) res) = VariantF tag $
+weakenF (VariantF (tag :: SSide ss) res) = VariantF (tag :: SSide ss) $
   case proveFollowInsertF @ss @f @bst of
-    HRefl -> res
+    HRefl -> (res :: Follow ss bst a)
+
+
+
+
+
+-- some1 :: forall (f1 :: k1 -> *) (a1 :: k1). SingI a1 => f1 a1 -> Some1 f1
+--foo :: SingI [Side] => (Flip Follow bst) [Side] -> Some1 (Flip Follow bst)
+-- foo = some1
+
+-- The Exinst.Dict1 class
+-- class Dict1 (c :: k0 -> Constraint) (f1 :: k1 -> k0) where
+--  dict1 :: Sing (a1 :: k1) -> Dict (c (f1 a1))
+
+
+type family ForAllIn (bst :: TypeSet k) (c :: k -> Constraint) :: Constraint where
+  ForAllIn 'Empty c = ()
+  ForAllIn ('Branch a l r) c = (c a, ForAllIn l c, ForAllIn r c)
+
+{-
 
 -- | Ensure that some constraint applies for all members of a 'TypeSet'
 type family ForAllMembers (c :: k -> Constraint) (bst :: TypeSet k) :: Constraint where
@@ -64,16 +96,10 @@ type family ForAllMembers (c :: k -> Constraint) (bst :: TypeSet k) :: Constrain
   ForAllMembers c ('Branch a l r)
     = (c a, ForAllMembers c l, ForAllMembers c r)
 
-proveForAllMembers :: forall c bst ss.
-  SSide ss -> (ForAllMembers c bst :- c (Follow ss bst))
-proveForAllMembers _ = unsafeCoerceConstraint
-
 
 
 instance (ForAllMembers Functor bst) => Functor (VariantF bst) where
-  fmap f (VariantF s r)
-    = case proveForAllMembers @Functor @bst s of
-      Sub Dict -> VariantF s (fmap f r)
+  fmap f (VariantF s r) = undefined
 
 instance ( ForAllMembers Functor bst
          , ForAllMembers Foldable bst
@@ -82,7 +108,6 @@ instance ( ForAllMembers Functor bst
     = case proveForAllMembers @Foldable @bst s of
       Sub Dict -> foldMap f r
 
-{-
 instance ( ForAllMembers Functor bst
          , ForAllMembers Foldable bst
          , ForAllMembers Traversable bst
@@ -114,4 +139,5 @@ instance ( ForAllMembers Show1 bst
          , ForAllMembers Typeable bst
          , Show a) => Show (VariantF bst a) where
   showsPrec = showsPrec1
+
 -}

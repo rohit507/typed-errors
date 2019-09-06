@@ -1,10 +1,10 @@
-cabal-version: 1.12
+cabal-version: 1.22
 
 -- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 24b2d72b28d55486ebb3fcd1970f4e2942f17c4b761003125bf5f859d90c2083
+-- hash: c520b43c758087f5cb655386266c9830fae4b9cba8006e8af61c2c239886f74f
 
 name:           typed-errors
 version:        0.0.1.0
@@ -27,6 +27,8 @@ library
       Type.Set.VariantF
   other-modules:
       Paths_typed_errors
+  reexported-modules:
+      Type.Compare.Plugin
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude ApplicativeDo BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveGeneric DeriveLift DeriveTraversable DerivingStrategies DuplicateRecordFields EmptyCase EmptyDataDecls ExistentialQuantification ExtendedDefaultRules FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving ImplicitParams InstanceSigs KindSignatures LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns NoImplicitPrelude NoMonomorphismRestriction OverloadedLabels OverloadedLists OverloadedStrings PackageImports PatternSynonyms PolyKinds QuasiQuotes QuantifiedConstraints RankNTypes RecordWildCards RecursiveDo ScopedTypeVariables StandaloneDeriving TemplateHaskell TupleSections TypeApplications TypeFamilies TypeFamilyDependencies TypeOperators ViewPatterns
@@ -34,8 +36,10 @@ library
   build-depends:
       base >=4.7 && <5
     , cmptype
-    , constraints >=0.10 && <1
+    , constraints >=0.11.1 && <1
+    , exinst
     , intro
+    , singletons
     , template-haskell
     , text
     , type-sets
@@ -53,8 +57,10 @@ test-suite experiments
   build-depends:
       base >=4.7 && <5
     , cmptype
-    , constraints >=0.10 && <1
+    , constraints >=0.11.1 && <1
+    , exinst
     , intro
+    , singletons
     , template-haskell
     , text
     , type-sets

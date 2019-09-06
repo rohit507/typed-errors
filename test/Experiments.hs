@@ -24,4 +24,4 @@ l = [a,b,c]
 
 main :: IO ()
 main = do
-  print $ foldMap id c
+  print $ map ('s':) c
