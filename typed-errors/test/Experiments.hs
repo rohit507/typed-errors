@@ -24,4 +24,4 @@ l = [a,b,c]
 
 main :: IO ()
 main = do
-  print $ map ('s':) c
+  print . fromVariantF @[] $ map ('s':) c

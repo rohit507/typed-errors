@@ -19,6 +19,9 @@ import GHC.TypeLits
 import Exinst
 
 
+
+type ConsProof bst ss = forall c. ForAllIn bst c :- c (Follow ss bst)
+
 ------------------------------------------------------------------------------
 -- | A 'VariantF' is a higher-order version of 'Variant' which can contain
 --   any of the 'Functor's within its 'TypeSet'. You can use 'toVariantF' to
@@ -58,6 +61,13 @@ decompRootF (VariantF SNil   t) = RootF t
 decompRootF (VariantF (SL s) t) = LSplitF (VariantF s t)
 decompRootF (VariantF (SR s) t) = RSplitF (VariantF s t)
 
+-- class Dict2 (c :: k0 -> Constraint) (f2 :: k2 -> k1 -> k0) where
+--   -- Runtime lookup of the @c (f2 a2 a1)@ instance.
+--   dict2 :: Sing a2 -> Sing a1 -> Dict (c (f2 a2 a1))
+
+instance () => Dict2 c Follow where
+  dict2 :: Sing bst -> Sing ss -> Dict (c (Follow bst ss))
+  dict2 =
 ------------------------------------------------------------------------------
 -- | A proof that inserting into a @bst@ doesn't affect the position of
 -- anything already in the tree.
@@ -69,20 +79,17 @@ proveFollowInsertF = unsafeCoerce HRefl
 weakenF :: forall f bst a. VariantF bst a -> VariantF (Insert f bst) a
 weakenF (VariantF (tag :: SSide ss) res) = VariantF (tag :: SSide ss) $
   case proveFollowInsertF @ss @f @bst of
-    HRefl -> (res :: Follow ss bst a)
-
-
-
-
+    HRefl -> res :: Follow ss bst a
 
 -- some1 :: forall (f1 :: k1 -> *) (a1 :: k1). SingI a1 => f1 a1 -> Some1 f1
---foo :: SingI [Side] => (Flip Follow bst) [Side] -> Some1 (Flip Follow bst)
+-- foo :: SingI [Side] => (Flip Follow bst) [Side] -> Some1 (Flip Follow bst)
 -- foo = some1
+
+
 
 -- The Exinst.Dict1 class
 -- class Dict1 (c :: k0 -> Constraint) (f1 :: k1 -> k0) where
 --  dict1 :: Sing (a1 :: k1) -> Dict (c (f1 a1))
-
 
 type family ForAllIn (bst :: TypeSet k) (c :: k -> Constraint) :: Constraint where
   ForAllIn 'Empty c = ()
