@@ -4,7 +4,7 @@
 
 module Type.Set.VariantF where
 
-import Intro
+import Intro hiding (Map)
 import Prelude (fmap)
 import Data.Kind
 import Type.Set
@@ -19,15 +19,13 @@ import GHC.TypeLits
 import Exinst
 
 
-
-type ConsProof bst ss = forall c. ForAllIn bst c :- c (Follow ss bst)
-
 ------------------------------------------------------------------------------
 -- | A 'VariantF' is a higher-order version of 'Variant' which can contain
 --   any of the 'Functor's within its 'TypeSet'. You can use 'toVariantF' to
 --   construct one, and 'fromVariantF' to pattern match it out.
 data VariantF (bst :: TypeSet (Type -> Type)) (a :: Type) where
-  VariantF :: SSide ss -> Follow ss bst a -> VariantF bst a
+  VariantF :: (forall c. ForAllIn c bst => c (Follow ss bst))
+    => SSide ss -> Follow ss bst a -> VariantF bst a
 type role VariantF nominal nominal
 
 ------------------------------------------------------------------------------
@@ -42,7 +40,6 @@ class HasF f bst where
   fromVariantF :: VariantF bst a -> Maybe (f a)
 
 instance ( Follow (Locate f bst) bst ~ f
-         -- , Locate (Follow (Locate f bst) bst) bst ~ Locate f bst
          , FromSides (Locate f bst)
          ) => HasF f bst where
   toVariantF = VariantF (fromSides @(Locate f bst))
@@ -61,13 +58,7 @@ decompRootF (VariantF SNil   t) = RootF t
 decompRootF (VariantF (SL s) t) = LSplitF (VariantF s t)
 decompRootF (VariantF (SR s) t) = RSplitF (VariantF s t)
 
--- class Dict2 (c :: k0 -> Constraint) (f2 :: k2 -> k1 -> k0) where
---   -- Runtime lookup of the @c (f2 a2 a1)@ instance.
---   dict2 :: Sing a2 -> Sing a1 -> Dict (c (f2 a2 a1))
 
-instance () => Dict2 c Follow where
-  dict2 :: Sing bst -> Sing ss -> Dict (c (Follow bst ss))
-  dict2 =
 ------------------------------------------------------------------------------
 -- | A proof that inserting into a @bst@ doesn't affect the position of
 -- anything already in the tree.
@@ -81,32 +72,36 @@ weakenF (VariantF (tag :: SSide ss) res) = VariantF (tag :: SSide ss) $
   case proveFollowInsertF @ss @f @bst of
     HRefl -> res :: Follow ss bst a
 
--- some1 :: forall (f1 :: k1 -> *) (a1 :: k1). SingI a1 => f1 a1 -> Some1 f1
--- foo :: SingI [Side] => (Flip Follow bst) [Side] -> Some1 (Flip Follow bst)
--- foo = some1
+type family ZipSides (ss :: [Side]) (f :: TypeSet k) (c :: k -> Constraint) :: Constraint where
+  ZipSides '[] ('Branch a _ _) c = c a
+  ZipSides (L ': ss) ('Branch _ l _) c = ZipSides ss l c
+  ZipSides (R ': ss) ('Branch _ _ r) c = ZipSides ss r c
+  ZipSides _ _ _ = TypeError ('Text "Member ss not found in tree")
 
+type family Map (c :: k -> k') (f :: kf k) :: kf k'
+type instance Map c 'Empty = 'Empty
+type instance Map c ('Branch a l r) = 'Branch (c a) (Map c l) (Map c r)
 
+type family Collect (f :: kf Constraint) :: Constraint
+type instance Collect 'Empty = ()
+type instance Collect ('Branch a l r) = (a, Collect l, Collect r)
 
--- The Exinst.Dict1 class
--- class Dict1 (c :: k0 -> Constraint) (f1 :: k1 -> k0) where
---  dict1 :: Sing (a1 :: k1) -> Dict (c (f1 a1))
+type family ForAllIn (c :: k -> Constraint) (f :: kf k) where
+  ForAllIn c t = Collect (Map c t)
 
-type family ForAllIn (bst :: TypeSet k) (c :: k -> Constraint) :: Constraint where
-  ForAllIn 'Empty c = ()
-  ForAllIn ('Branch a l r) c = (c a, ForAllIn l c, ForAllIn r c)
+instance (ForAllIn Functor bst) => Functor (VariantF bst) where
+  fmap f (VariantF s r) = VariantF s (fmap f r)
 
 {-
+type family ForAllIn (c :: k -> Constraint) (bst :: c k) :: Constraint where
+  ForAllIn c 'Empty = 'Empty
+  ForAllIn c ('Branch a l r) = 'Branch (c a) (ForAllIn c l) (ForAllIn c r)
 
--- | Ensure that some constraint applies for all members of a 'TypeSet'
-type family ForAllMembers (c :: k -> Constraint) (bst :: TypeSet k) :: Constraint where
-  ForAllMembers c 'Empty = ()
-  ForAllMembers c ('Branch a l r)
-    = (c a, ForAllMembers c l, ForAllMembers c r)
-
+-- Forall ss. (ForAllIn c bst) => c (Follow ss bst)
 
 
-instance (ForAllMembers Functor bst) => Functor (VariantF bst) where
-  fmap f (VariantF s r) = undefined
+
+
 
 instance ( ForAllMembers Functor bst
          , ForAllMembers Foldable bst
