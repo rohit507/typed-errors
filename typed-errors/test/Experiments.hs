@@ -8,20 +8,18 @@ import Type.Set.Variant
 import Type.Set
 
 
-type VF = VariantF (Insert Maybe (Insert [] 'Empty))
+class EqualityErr a e where
 
-a :: VF String
-a = toVariantF (Just "foo")
+  valuesNotEqual :: a -> e
+  equalityContext :: a -> e -> e
 
-b :: VF String
-b = toVariantF (Nothing)
+class TypeMismatchErr e where
+  typesNotEqual :: (Typeable a, Typeable b) => a -> b -> e
+  withinParentMatch :: (Typeable a, Typeable b) => a -> b -> e -> e
 
-c :: VF String
-c = toVariantF @[] ["a","b","c"]
+deriveErrorTypes ''EqualityErr
 
-l :: [VF String]
-l = [a,b,c]
+deriveErrorTypes ''TypeMismatchErr
 
 main :: IO ()
-main = do
-  print . fromVariantF @[] $ map ('s':) c
+main = print 2
