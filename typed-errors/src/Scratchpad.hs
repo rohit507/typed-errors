@@ -144,3 +144,13 @@ deriveErrorTypes n = do
   reportWarning . show @(Either TypedErrErrT ErrorClass)
     $ convertClassInfo classData
   pure []
+
+-- TODO ::
+--   - Write code for error class.
+--   - Generate the functor version of the error type
+--     - Generate the instance for that error type
+--     - Generate the instance for when the functor is a member of Error\
+--     - Generate Eq1, Ord1, Show1, Eq, Ord, Show, Generic, NFData, NFData1
+--       Functor, Foldable, Traversable and Typeable instances for each type.
+--   - Generate the pattern synonyms
+--   - Generate the throw/while functions for the class.
