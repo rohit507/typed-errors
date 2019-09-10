@@ -8,7 +8,7 @@ import Language.Haskell.TH
 import Type.Set
 import Type.Set.Variant
 import Type.Set.VariantF
-import Data.Typed.Error
+import Data.Typed.Error.Internal
 import Data.Constraint
 -- import Lens.Micro
 -- import Lens.Micro.Mtl
@@ -96,7 +96,7 @@ class (ClassConstraints, InternalErr i, InternalErr e) => GetInternalErr e i | e
   fromWithinClass          :: e -> Maybe (Dict (ClassConstraints), (Name, i))
   fromWithinFunction       :: e -> Maybe (Dict (ClassConstraints), (Name, i))
 
-instance (ClassConstraints
+instance ( ClassConstraints
          , InternalErr e
          , InternalErr (InternalErrT e)
          , RewriteError i InternalErrT) => GetInternalErr (InternalErrT e) e where
@@ -145,57 +145,57 @@ instance (ClassConstraints
 
 instance ( ClassConstraints
          , InternalErr (TypedErrorV p)
-         , HasError InternalErrT p
+         , HasError InternalErr p
          ) => GetInternalErr (TypedErrorV p) (TypedErrorV p) where
 
   liftInternalErr = id
 
   fromNonClassInfo         :: TypedErrorV p -> Maybe (Dict (ClassConstraints, FuncConstraints), Info)
-  fromNonClassInfo         (fromError @InternalErrT -> Just (NonClassInfoT a)) = Just (Dict,a)
+  fromNonClassInfo         (fromError @InternalErr -> Just (NonClassInfoT a)) = Just (Dict,a)
   fromNonClassInfo         _ = Nothing
 
   fromNonClassDec          :: TypedErrorV p -> Maybe (Dict (ClassConstraints), Dec)
-  fromNonClassDec          (fromError @InternalErrT -> Just (NonClassDecT a)) = Just (Dict,a)
+  fromNonClassDec          (fromError @InternalErr -> Just (NonClassDecT a)) = Just (Dict,a)
   fromNonClassDec          _ = Nothing
 
   fromFunctionWithNoParams :: TypedErrorV p -> Maybe (Dict (ClassConstraints), ())
-  fromFunctionWithNoParams (fromError @InternalErrT -> Just (FunctionWithNoParamsT)) = Just (Dict,())
+  fromFunctionWithNoParams (fromError @InternalErr -> Just (FunctionWithNoParamsT)) = Just (Dict,())
   fromFunctionWithNoParams _ = Nothing
 
   fromMissingErrorTyVar    :: TypedErrorV p -> Maybe (Dict (ClassConstraints), ())
-  fromMissingErrorTyVar    (fromError @InternalErrT -> Just(MissingErrorTyVarT)) = Just (Dict,())
+  fromMissingErrorTyVar    (fromError @InternalErr -> Just(MissingErrorTyVarT)) = Just (Dict,())
   fromMissingErrorTyVar    _ = Nothing
 
   fromInvalidFundep        :: TypedErrorV p -> Maybe (Dict (ClassConstraints), (Name, FunDep))
-  fromInvalidFundep        (fromError @InternalErrT -> Just(InvalidFundepT a b)) = Just (Dict,(a,b))
+  fromInvalidFundep        (fromError @InternalErr -> Just(InvalidFundepT a b)) = Just (Dict,(a,b))
   fromInvalidFundep        _ = Nothing
 
   fromNotFunctionSig       :: TypedErrorV p -> Maybe (Dict (ClassConstraints), Dec)
-  fromNotFunctionSig       (fromError @InternalErrT -> Just(NotFunctionSigT a)) = Just (Dict,a)
+  fromNotFunctionSig       (fromError @InternalErr -> Just(NotFunctionSigT a)) = Just (Dict,a)
   fromNotFunctionSig       _ = Nothing
 
   fromInvalidFuncType      :: TypedErrorV p -> Maybe (Dict (ClassConstraints), Type)
-  fromInvalidFuncType      (fromError @InternalErrT -> Just(InvalidFuncTypeT a)) = Just (Dict,a)
+  fromInvalidFuncType      (fromError @InternalErr -> Just(InvalidFuncTypeT a)) = Just (Dict,a)
   fromInvalidFuncType      _ = Nothing
 
   fromInvalidFinalParam    :: TypedErrorV p -> Maybe (Dict (ClassConstraints), (Name, Type))
-  fromInvalidFinalParam    (fromError @InternalErrT -> Just(InvalidFinalParamT a b)) = Just (Dict,(a,b))
+  fromInvalidFinalParam    (fromError @InternalErr -> Just(InvalidFinalParamT a b)) = Just (Dict,(a,b))
   fromInvalidFinalParam    _ = Nothing
 
   fromWithinClass          :: TypedErrorV p -> Maybe (Dict (ClassConstraints), (Name, TypedErrorV p))
-  fromWithinClass          (fromError @InternalErrT -> Just(WithinClassT a b)) = Just (Dict,(a,b))
+  fromWithinClass          (fromError @InternalErr -> Just(WithinClassT a b)) = Just (Dict,(a,b))
   fromWithinClass          _ = Nothing
 
   fromWithinFunction       :: TypedErrorV p -> Maybe (Dict (ClassConstraints), (Name, TypedErrorV p))
-  fromWithinFunction       (fromError @InternalErrT -> Just (WithinFunctionT a b)) = Just (Dict,(a,b))
+  fromWithinFunction       (fromError @InternalErr -> Just (WithinFunctionT a b)) = Just (Dict,(a,b))
   fromWithinFunction       _ = Nothing
 
 -- * Pattern Synonyms
 
-pattern InternalErr :: (ClassConstraints, HasError InternalErrT p)
+pattern InternalErr :: (ClassConstraints, HasError InternalErr p)
                     => (ClassConstraints)
                     => InternalErrT (TypedErrorV p) -> TypedErrorV p
-pattern InternalErr x <- (fromError @InternalErrT -> Just x)
+pattern InternalErr x <- (fromError @InternalErr -> Just x)
   where
     InternalErr x = toError x
 
@@ -232,7 +232,7 @@ pattern NoFunctionSig :: forall e i. (InternalErr e, GetInternalErr e i)
                     => Dec -> e
 pattern NoFunctionSig x <- (fromNotFunctionSig @e @i -> Just (Dict, x))
   where
-    NoFunctionSig x = NoFunctionSig @e x
+    NoFunctionSig x = NoFunctionSig @e @i x
 
 pattern InvalidFuncType :: forall e i. (InternalErr e, GetInternalErr e i)
                     => (ClassConstraints)
@@ -256,9 +256,9 @@ pattern FunctionWithNoParams <- (fromFunctionWithNoParams @e @i -> Just (Dict, (
     FunctionWithNoParams = functionWithNoParams @e
 
 pattern WithinClass :: forall e i. ( InternalErr i
-                                  , InternalErr e
-                                  , GetInternalErr e i
-                                  , GetInternalErr i e)
+                                   , InternalErr e
+                                   , GetInternalErr e i
+                                   , GetInternalErr i e)
                     => (ClassConstraints)
                     => Name -> i -> e
 pattern WithinClass a b <- (fromWithinClass @e @i -> Just (Dict, (a,b)))
@@ -275,5 +275,5 @@ pattern WithinFunction a b <- (fromWithinFunction @e @i -> Just (Dict, (a,b)))
   where
     WithinFunction a b = withinFunction @e a (liftInternalErr b)
 
-foo :: (HasError InternalErr p)  => TypedErrorV p
-foo = WithinClass _ MissingErrorTyVar
+foo :: forall p. (CC, HasError InternalErr p)  => TypedErrorV p
+foo = WithinClass undefined MissingErrorTyVar
