@@ -1,21 +1,18 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Scratchpad where
+module Data.Typed.Error where
 
 import Intro hiding (Type)
 import Language.Haskell.TH
 import Type.Set
 import Type.Set.Variant
 import Type.Set.VariantF
+import Data.Typed.Error
 import Lens.Micro
 import Lens.Micro.Mtl
 import Lens.Micro.TH
-import Data.Either.Validation
 
-type family FromList (l :: [k]) :: TypeSet k where
-  FromList '[] = 'Empty
-  FromList (a ': as) = Insert a (FromList as)
 
 data ErrorRules = ErrorRules {
   } deriving (Eq, Ord, Show)
@@ -40,49 +37,7 @@ makeFields ''ErrorRules
 makeFields ''ErrorClass
 makeFields ''ErrorFunc
 
-class TypedErrErr e where
-  notProvidedClass  :: Either Info Dec -> e
-  missingErrorTyVar :: e
-  invalidFundep     :: Name -> FunDep -> e
-  notFunctionSig    :: Dec -> e
-  invalidFuncType   :: Type -> e
-  invalidFinalParam :: Name -> Type -> e
-  functionWithNoParams :: e
-  withinClass       :: Name -> e -> e
-  withinSig         :: Name -> e -> e
 
-data TypedErrErrT where
-  NotProvidedClass    :: Either Info Dec -> TypedErrErrT
-  MissingErrorTyVar   :: TypedErrErrT
-  InvalidFundep       :: Name -> FunDep -> TypedErrErrT
-  NotFunctionSig      :: Dec -> TypedErrErrT
-  InvalidFinalParam   :: Name -> Type -> TypedErrErrT
-  InvalidFuncType     :: Type -> TypedErrErrT
-  FunctionWithNoParams :: TypedErrErrT
-  WithinClass         :: Name -> TypedErrErrT -> TypedErrErrT
-  WithinSig           :: Name -> TypedErrErrT -> TypedErrErrT
-  Many                :: [TypedErrErrT] -> TypedErrErrT
-  deriving (Eq, Ord, Show)
-
-instance TypedErrErr TypedErrErrT where
-  notProvidedClass  = NotProvidedClass
-  missingErrorTyVar = MissingErrorTyVar
-  invalidFundep     = InvalidFundep
-  notFunctionSig    = NotFunctionSig
-  invalidFinalParam = InvalidFinalParam
-  invalidFuncType   = InvalidFuncType
-  functionWithNoParams = FunctionWithNoParams
-  withinClass       = WithinClass
-  withinSig         = WithinSig
-
-instance Semigroup TypedErrErrT where
-  (Many es) <> (Many es') = Many $ es <> es'
-  (Many es) <> a          = Many $ es <> [a]
-  a         <> (Many es ) = Many $ a : es
-  a         <> b          = Many [a,b]
-
-instance Monoid TypedErrErrT where
-  mempty = Many []
 
 convertClassInfo :: forall e. (TypedErrErr e
                              ) => Info -> Either e ErrorClass
@@ -144,6 +99,8 @@ deriveErrorTypes n = do
   reportWarning . show @(Either TypedErrErrT ErrorClass)
     $ convertClassInfo classData
   pure []
+
+
 
 -- TODO ::
 --   - Write code for error class.
