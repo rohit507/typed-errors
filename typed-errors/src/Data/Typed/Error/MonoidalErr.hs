@@ -1,6 +1,5 @@
 
-module Data.Typed.Error.MonoidalErr
-
+module Data.Typed.Error.MonoidalErr where
 import Intro hiding (Type)
 import Language.Haskell.TH
 import Data.Constraint

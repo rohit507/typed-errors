@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Data.Typed.Error where
 
@@ -17,47 +18,56 @@ import Lens.Micro.TH
 
 -- | An open type family which matches an error constraint with the
 --   corresponding generated GADT
+--
+--   to be exported
 type family ErrorType (c :: * -> Constraint) = (r :: * -> *) | r -> c
 
 -- | Converts a list of error constraints that we should satisfy into a
 --   a TypeSet of GADTs that can store those errors.
+--
+--   to be hidden
 type family ErrorList (l :: [* -> Constraint]) :: TypeSet (* -> *) where
   ErrorList '[] = 'Empty
   ErrorList (a ': as) = Insert (ErrorType a) (ErrorList as)
 
 -- | Synonym for a typed error that uses a list of constraints.
+--   exported
 type TypedError p = TypedErrorV (ErrorList p)
 
 -- | A variant type that can store a number of the Generated error classes.
+--   hidden
 newtype TypedErrorV (p :: TypeSet (* -> *)) where
   TypedErrorV :: { getError :: VariantF p (TypedErrorV p) } -> TypedErrorV p
 
 -- | Extract or insert rules into Errors.
-class HasError (f :: * -> *) (p :: TypeSet (* -> *)) where
+--   exported
+class HasError (f :: * -> Constraint) (p :: [* -> Constraint]) where
 
-  fromError :: TypedErrorV p -> Maybe (f (TypedErrorV p))
+  fromError :: TypedError p -> Maybe ((ErrorType f) (TypedError p))
 
-  toError :: f (TypedErrorV p) -> TypedErrorV p
+  toError :: (ErrorType f) (TypedError p) -> TypedError p
 
-instance (HasF f p) => HasError f p where
+instance (HasF (ErrorType f) (ErrorList p)) => HasError f p where
 
   fromError (TypedErrorV a) = fromVariantF a
 
   toError f = TypedErrorV $ toVariantF f
 
 -- | Intermediate class we use in order to
+--   hidden
 class RewriteError (e :: *) (p :: * -> *)  where
   rewriteError :: p e -> e
 
-class ConvertError (e :: *) (p :: TypeSet (* -> *)) where
-  convertError :: TypedErrorV p -> e
+-- | exported
+class ConvertError (e :: *) (p :: [* -> Constraint]) where
+  convertError :: TypedError p -> e
 
-instance ( ForAllIn (RewriteError e) p
-         , ForAllIn Functor p
+instance ( ForAllIn (RewriteError e) (ErrorList p)
+         , ForAllIn Functor (ErrorList p)
          ) => ConvertError e p where
   convertError (TypedErrorV (VariantF s b))
-    = case forMember @_ @(RewriteError e) @p s of
-        Dict -> case forMember @_ @Functor @p s of
+    = case forMember @_ @(RewriteError e) @(ErrorList p) s of
+        Dict -> case forMember @_ @Functor @(ErrorList p) s of
           Dict -> rewriteError $ convertError <$> b
 
 -- TODO ::

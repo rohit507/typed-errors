@@ -1,7 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Data.Typed.Error where
+module Data.Typed.Error.TH where
 
 import Intro hiding (Type)
 import Language.Haskell.TH
