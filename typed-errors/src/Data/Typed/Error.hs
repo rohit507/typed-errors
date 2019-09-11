@@ -2,8 +2,8 @@
 module Data.Typed.Error ( module P ) where
 
 import Data.Typed.Error.Internal as P
-  ( ErrorType(..)
+  ( ErrorType()
   , TypedError
-  , HasError()
+  , HasError(..)
   , convertError
   )

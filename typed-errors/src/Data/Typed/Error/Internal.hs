@@ -23,13 +23,9 @@ type family ErrorList (l :: [* -> Constraint]) = (r :: TypeSet (* -> *)) where
   ErrorList '[] = 'Empty
   ErrorList (a ': as) = Insert (ErrorType a) (ErrorList as)
 
--- | Synonym for a typed error that uses a list of constraints.
---   exported
-type TypedError p = TypedErrorV (ErrorList p)
-
 -- | A variant type that can store a number of the Generated error classes.
-newtype TypedErrorV (p :: TypeSet (* -> *)) where
-  TypedErrorV :: { getError :: VariantF p (TypedErrorV p) } -> TypedErrorV p
+newtype TypedError (p :: [* -> Constraint]) where
+  TypedError :: { getError :: VariantF (ErrorList p) (TypedError p) } -> TypedError p
 
 -- | Extract or insert rules into Errors.
 class HasError (f :: * -> Constraint) (p :: [* -> Constraint]) where
@@ -40,9 +36,9 @@ class HasError (f :: * -> Constraint) (p :: [* -> Constraint]) where
 
 instance (HasF (ErrorType f) (ErrorList p)) => HasError f p where
 
-  fromError (TypedErrorV a) = fromVariantF a
+  fromError (TypedError a) = fromVariantF a
 
-  toError f = TypedErrorV $ toVariantF f
+  toError f = TypedError $ toVariantF f
 
 -- | Intermediate class we use in order to implement ConvertError
 class RewriteError (e :: *) (p :: * -> *)  where
@@ -51,7 +47,7 @@ class RewriteError (e :: *) (p :: * -> *)  where
 convertError :: forall e p. (ForAllIn (RewriteError e) (ErrorList p)
                , ForAllIn Functor (ErrorList p)
                ) => TypedError p -> e
-convertError (TypedErrorV (VariantF s b))
+convertError (TypedError (VariantF s b))
     = case forMember @_ @(RewriteError e) @(ErrorList p) s of
         Dict -> case forMember @_ @Functor @(ErrorList p) s of
           Dict -> rewriteError $ convertError @e @p <$> b
