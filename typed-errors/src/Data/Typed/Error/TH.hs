@@ -8,37 +8,27 @@ import Language.Haskell.TH
 import Type.Set
 import Type.Set.Variant
 import Type.Set.VariantF
-import Data.Typed.Error
-import Lens.Micro
-import Lens.Micro.Mtl
-import Lens.Micro.TH
+import Data.Typed.Error.Internal
+import Data.Typed.Error.TH.InternalErr
+import Data.Typed.Error.TH.Types
 
+data FuncInfo = FuncInfo {
+    name :: Name
+  , tyVars :: [TyVarBndr]
+  , ctxt :: Cxt
+  , params :: [Type]
+  }
 
-data ErrorRules = ErrorRules {
-  } deriving (Eq, Ord, Show)
-
-data ErrorClass = ErrorClass {
-    _ctxt :: Cxt
-  , _name :: Name
-  , _fixedTyVars :: [TyVarBndr]
-  , _errorTyVar  :: TyVarBndr
-  , _funDeps :: [FunDep]
-  , _decs :: [ErrorFunc]
-  } deriving (Eq, Ord, Show)
-
-data ErrorFunc = ErrorFunc {
-    _name :: Name
-  , _tyVars :: [TyVarBndr]
-  , _ctxt :: Cxt
-  , _params :: [Type]
-  } deriving (Eq, Ord, Show)
-
-makeFields ''ErrorRules
-makeFields ''ErrorClass
-makeFields ''ErrorFunc
+data ClassInfo = ClassInfo {
+     name :: Name
+   , tyVars :: [TyVarBndr]
+   , errTyVar :: TyVarBndr
+   , ctxt :: Cxt
+   }
 
 
 
+{-
 convertClassInfo :: forall e. (TypedErrErr e
                              ) => Info -> Either e ErrorClass
 convertClassInfo (ClassI d _) = convertClassDec d
@@ -111,3 +101,4 @@ deriveErrorTypes n = do
 --       Functor, Foldable, Traversable and Typeable instances for each type.
 --   - Generate the pattern synonyms
 --   - Generate the throw/while functions for the class.
+-}

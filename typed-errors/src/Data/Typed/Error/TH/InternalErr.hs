@@ -15,13 +15,13 @@ import Text.Show
 --   constraints correct in this module.
 --
 --   When we end up using InternalErr we'll just make some empty instances.
-class ClassConstraints
-class FuncConstraints
+class CCIntE
+class FCIntE
 
 -- | Internal Error Type used when generating errors.
 --   Also kinda a showcase of what a manual instance should look like
-class (ClassConstraints) => InternalErr e where
-  nonClassInfo         :: (FuncConstraints) => Info -> e
+class (CCIntE) => InternalErr e where
+  nonClassInfo         :: (FCIntE) => Info -> e
   nonClassDec          :: Dec -> e
   missingErrorTyVar    :: e
   invalidFundep        :: Name -> FunDep -> e
@@ -35,16 +35,16 @@ class (ClassConstraints) => InternalErr e where
 -- * Associated GADT
 
 data InternalErrT e where
-  NonClassInfoT         :: (ClassConstraints, FuncConstraints) => Info -> InternalErrT e
-  NonClassDecT          :: (ClassConstraints) => Dec -> InternalErrT e
-  MissingErrorTyVarT    :: (ClassConstraints) => InternalErrT e
-  InvalidFundepT        :: (ClassConstraints) => Name -> FunDep -> InternalErrT e
-  NotFunctionSigT       :: (ClassConstraints) => Dec -> InternalErrT e
-  InvalidFuncTypeT      :: (ClassConstraints) => Type -> InternalErrT e
-  InvalidFinalParamT    :: (ClassConstraints) => Name -> Type -> InternalErrT e
-  FunctionWithNoParamsT :: (ClassConstraints) => InternalErrT e
-  WithinClassT          :: (ClassConstraints) => Name -> e -> InternalErrT e
-  WithinFunctionT       :: (ClassConstraints) => Name -> e -> InternalErrT e
+  NonClassInfoT         :: (CCIntE, FCIntE) => Info -> InternalErrT e
+  NonClassDecT          :: (CCIntE) => Dec -> InternalErrT e
+  MissingErrorTyVarT    :: (CCIntE) => InternalErrT e
+  InvalidFundepT        :: (CCIntE) => Name -> FunDep -> InternalErrT e
+  NotFunctionSigT       :: (CCIntE) => Dec -> InternalErrT e
+  InvalidFuncTypeT      :: (CCIntE) => Type -> InternalErrT e
+  InvalidFinalParamT    :: (CCIntE) => Name -> Type -> InternalErrT e
+  FunctionWithNoParamsT :: (CCIntE) => InternalErrT e
+  WithinClassT          :: (CCIntE) => Name -> e -> InternalErrT e
+  WithinFunctionT       :: (CCIntE) => Name -> e -> InternalErrT e
 
 type instance ErrorType InternalErr = InternalErrT
 
@@ -153,7 +153,7 @@ instance Traversable InternalErrT where
 
 -- * Instance for packing InternalErrors into TypedErrors
 
-instance (ClassConstraints, HasError InternalErr p) => InternalErr (TypedError p) where
+instance (CCIntE, HasError InternalErr p) => InternalErr (TypedError p) where
   nonClassInfo         a   = toError $ NonClassInfoT      a
   nonClassDec          a   = toError $ NonClassDecT       a
   missingErrorTyVar        = toError $ MissingErrorTyVarT
@@ -181,175 +181,175 @@ instance (InternalErr e) => RewriteError e InternalErrT where
 
 -- * Pattern Synonym Supporting Class and Instances
 
-class (ClassConstraints, InternalErr i, InternalErr e) => GetInternalErr e i | e -> i where
+class (CCIntE, InternalErr i, InternalErr e) => GetInternalErr e i | e -> i where
 
   liftInternalErr :: e -> i
 
-  fromNonClassInfo         :: e -> Maybe (Dict (ClassConstraints, FuncConstraints), Info)
-  fromNonClassDec          :: e -> Maybe (Dict (ClassConstraints), Dec)
-  fromMissingErrorTyVar    :: e -> Maybe (Dict (ClassConstraints), ())
-  fromInvalidFundep        :: e -> Maybe (Dict (ClassConstraints), (Name, FunDep))
-  fromNotFunctionSig       :: e -> Maybe (Dict (ClassConstraints), Dec)
-  fromInvalidFuncType      :: e -> Maybe (Dict (ClassConstraints), Type)
-  fromInvalidFinalParam    :: e -> Maybe (Dict (ClassConstraints), (Name, Type))
-  fromFunctionWithNoParams :: e -> Maybe (Dict (ClassConstraints), ())
-  fromWithinClass          :: e -> Maybe (Dict (ClassConstraints), (Name, i))
-  fromWithinFunction       :: e -> Maybe (Dict (ClassConstraints), (Name, i))
+  fromNonClassInfo         :: e -> Maybe (Dict (CCIntE, FCIntE), Info)
+  fromNonClassDec          :: e -> Maybe (Dict (CCIntE), Dec)
+  fromMissingErrorTyVar    :: e -> Maybe (Dict (CCIntE), ())
+  fromInvalidFundep        :: e -> Maybe (Dict (CCIntE), (Name, FunDep))
+  fromNotFunctionSig       :: e -> Maybe (Dict (CCIntE), Dec)
+  fromInvalidFuncType      :: e -> Maybe (Dict (CCIntE), Type)
+  fromInvalidFinalParam    :: e -> Maybe (Dict (CCIntE), (Name, Type))
+  fromFunctionWithNoParams :: e -> Maybe (Dict (CCIntE), ())
+  fromWithinClass          :: e -> Maybe (Dict (CCIntE), (Name, i))
+  fromWithinFunction       :: e -> Maybe (Dict (CCIntE), (Name, i))
 
-instance ( ClassConstraints
+instance ( CCIntE
          , InternalErr e
          , InternalErr (InternalErrT e)
-         , RewriteError i InternalErrT) => GetInternalErr (InternalErrT e) e where
+         , RewriteError e InternalErrT) => GetInternalErr (InternalErrT e) e where
 
   liftInternalErr = rewriteError
 
-  fromNonClassInfo         :: InternalErrT e -> Maybe (Dict (ClassConstraints, FuncConstraints), Info)
+  fromNonClassInfo         :: InternalErrT e -> Maybe (Dict (CCIntE, FCIntE), Info)
   fromNonClassInfo         (NonClassInfoT a) = Just (Dict,a)
   fromNonClassInfo         _ = Nothing
 
-  fromNonClassDec          :: InternalErrT e -> Maybe (Dict (ClassConstraints), Dec)
+  fromNonClassDec          :: InternalErrT e -> Maybe (Dict (CCIntE), Dec)
   fromNonClassDec          (NonClassDecT a) = Just (Dict,a)
   fromNonClassDec          _ = Nothing
 
-  fromFunctionWithNoParams :: InternalErrT e -> Maybe (Dict (ClassConstraints), ())
+  fromFunctionWithNoParams :: InternalErrT e -> Maybe (Dict (CCIntE), ())
   fromFunctionWithNoParams (FunctionWithNoParamsT) = Just (Dict,())
   fromFunctionWithNoParams _ = Nothing
 
-  fromMissingErrorTyVar    :: InternalErrT e -> Maybe (Dict (ClassConstraints), ())
+  fromMissingErrorTyVar    :: InternalErrT e -> Maybe (Dict (CCIntE), ())
   fromMissingErrorTyVar    (MissingErrorTyVarT) = Just (Dict,())
   fromMissingErrorTyVar    _ = Nothing
 
-  fromInvalidFundep        :: InternalErrT e -> Maybe (Dict (ClassConstraints), (Name, FunDep))
+  fromInvalidFundep        :: InternalErrT e -> Maybe (Dict (CCIntE), (Name, FunDep))
   fromInvalidFundep        (InvalidFundepT a b) = Just (Dict,(a,b))
   fromInvalidFundep        _ = Nothing
 
-  fromNotFunctionSig       :: InternalErrT e -> Maybe (Dict (ClassConstraints), Dec)
+  fromNotFunctionSig       :: InternalErrT e -> Maybe (Dict (CCIntE), Dec)
   fromNotFunctionSig       (NotFunctionSigT a) = Just (Dict,a)
   fromNotFunctionSig       _ = Nothing
 
-  fromInvalidFuncType      :: InternalErrT e -> Maybe (Dict (ClassConstraints), Type)
+  fromInvalidFuncType      :: InternalErrT e -> Maybe (Dict (CCIntE), Type)
   fromInvalidFuncType      (InvalidFuncTypeT a) = Just (Dict,a)
   fromInvalidFuncType      _ = Nothing
 
-  fromInvalidFinalParam    :: InternalErrT e -> Maybe (Dict (ClassConstraints), (Name, Type))
+  fromInvalidFinalParam    :: InternalErrT e -> Maybe (Dict (CCIntE), (Name, Type))
   fromInvalidFinalParam    (InvalidFinalParamT a b) = Just (Dict,(a,b))
   fromInvalidFinalParam    _ = Nothing
 
-  fromWithinClass          :: InternalErrT e -> Maybe (Dict (ClassConstraints), (Name, e))
+  fromWithinClass          :: InternalErrT e -> Maybe (Dict (CCIntE), (Name, e))
   fromWithinClass          (WithinClassT a b) = Just (Dict,(a,b))
   fromWithinClass          _ = Nothing
 
-  fromWithinFunction       :: InternalErrT e -> Maybe (Dict (ClassConstraints), (Name, e))
+  fromWithinFunction       :: InternalErrT e -> Maybe (Dict (CCIntE), (Name, e))
   fromWithinFunction       (WithinFunctionT a b) = Just (Dict,(a,b))
   fromWithinFunction       _ = Nothing
 
-instance ( ClassConstraints
+instance ( CCIntE
          , InternalErr (TypedError p)
          , HasError InternalErr p
          ) => GetInternalErr (TypedError p) (TypedError p) where
 
   liftInternalErr = id
 
-  fromNonClassInfo         :: TypedError p -> Maybe (Dict (ClassConstraints, FuncConstraints), Info)
+  fromNonClassInfo         :: TypedError p -> Maybe (Dict (CCIntE, FCIntE), Info)
   fromNonClassInfo         (fromError @InternalErr -> Just (NonClassInfoT a)) = Just (Dict,a)
   fromNonClassInfo         _ = Nothing
 
-  fromNonClassDec          :: TypedError p -> Maybe (Dict (ClassConstraints), Dec)
+  fromNonClassDec          :: TypedError p -> Maybe (Dict (CCIntE), Dec)
   fromNonClassDec          (fromError @InternalErr -> Just (NonClassDecT a)) = Just (Dict,a)
   fromNonClassDec          _ = Nothing
 
-  fromFunctionWithNoParams :: TypedError p -> Maybe (Dict (ClassConstraints), ())
+  fromFunctionWithNoParams :: TypedError p -> Maybe (Dict (CCIntE), ())
   fromFunctionWithNoParams (fromError @InternalErr -> Just (FunctionWithNoParamsT)) = Just (Dict,())
   fromFunctionWithNoParams _ = Nothing
 
-  fromMissingErrorTyVar    :: TypedError p -> Maybe (Dict (ClassConstraints), ())
+  fromMissingErrorTyVar    :: TypedError p -> Maybe (Dict (CCIntE), ())
   fromMissingErrorTyVar    (fromError @InternalErr -> Just(MissingErrorTyVarT)) = Just (Dict,())
   fromMissingErrorTyVar    _ = Nothing
 
-  fromInvalidFundep        :: TypedError p -> Maybe (Dict (ClassConstraints), (Name, FunDep))
+  fromInvalidFundep        :: TypedError p -> Maybe (Dict (CCIntE), (Name, FunDep))
   fromInvalidFundep        (fromError @InternalErr -> Just(InvalidFundepT a b)) = Just (Dict,(a,b))
   fromInvalidFundep        _ = Nothing
 
-  fromNotFunctionSig       :: TypedError p -> Maybe (Dict (ClassConstraints), Dec)
+  fromNotFunctionSig       :: TypedError p -> Maybe (Dict (CCIntE), Dec)
   fromNotFunctionSig       (fromError @InternalErr -> Just(NotFunctionSigT a)) = Just (Dict,a)
   fromNotFunctionSig       _ = Nothing
 
-  fromInvalidFuncType      :: TypedError p -> Maybe (Dict (ClassConstraints), Type)
+  fromInvalidFuncType      :: TypedError p -> Maybe (Dict (CCIntE), Type)
   fromInvalidFuncType      (fromError @InternalErr -> Just(InvalidFuncTypeT a)) = Just (Dict,a)
   fromInvalidFuncType      _ = Nothing
 
-  fromInvalidFinalParam    :: TypedError p -> Maybe (Dict (ClassConstraints), (Name, Type))
+  fromInvalidFinalParam    :: TypedError p -> Maybe (Dict (CCIntE), (Name, Type))
   fromInvalidFinalParam    (fromError @InternalErr -> Just(InvalidFinalParamT a b)) = Just (Dict,(a,b))
   fromInvalidFinalParam    _ = Nothing
 
-  fromWithinClass          :: TypedError p -> Maybe (Dict (ClassConstraints), (Name, TypedError p))
+  fromWithinClass          :: TypedError p -> Maybe (Dict (CCIntE), (Name, TypedError p))
   fromWithinClass          (fromError @InternalErr -> Just(WithinClassT a b)) = Just (Dict,(a,b))
   fromWithinClass          _ = Nothing
 
-  fromWithinFunction       :: TypedError p -> Maybe (Dict (ClassConstraints), (Name, TypedError p))
+  fromWithinFunction       :: TypedError p -> Maybe (Dict (CCIntE), (Name, TypedError p))
   fromWithinFunction       (fromError @InternalErr -> Just (WithinFunctionT a b)) = Just (Dict,(a,b))
   fromWithinFunction       _ = Nothing
 
 -- * Pattern Synonyms
 
-pattern InternalErr :: (ClassConstraints, HasError InternalErr p)
-                    => (ClassConstraints)
+pattern InternalErr :: (CCIntE, HasError InternalErr p)
+                    => (CCIntE)
                     => InternalErrT (TypedError p) -> TypedError p
 pattern InternalErr x <- (fromError @InternalErr -> Just x)
   where
     InternalErr x = toError x
 
 pattern NonClassInfo :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints, FuncConstraints)
+                    => (CCIntE, FCIntE)
                     => Info -> e
 pattern NonClassInfo x <- (fromNonClassInfo @e @i -> Just (Dict, x))
   where
     NonClassInfo x = nonClassInfo @e x
 
 pattern NonClassDec :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Dec -> e
 pattern NonClassDec x <- (fromNonClassDec @e @i -> Just (Dict, x))
   where
     NonClassDec x = nonClassDec @e x
 
 pattern MissingErrorTyVar :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => e
 pattern MissingErrorTyVar <- (fromMissingErrorTyVar @e @i -> Just (Dict, ()))
   where
     MissingErrorTyVar = missingErrorTyVar @e
 
 pattern InvalidFundep :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Name -> FunDep -> e
 pattern InvalidFundep a b <- (fromInvalidFundep @e @i -> Just (Dict, (a,b)))
   where
     InvalidFundep a b = invalidFundep @e a b
 
 pattern NoFunctionSig :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Dec -> e
 pattern NoFunctionSig x <- (fromNotFunctionSig @e @i -> Just (Dict, x))
   where
     NoFunctionSig x = NoFunctionSig @e @i x
 
 pattern InvalidFuncType :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Type -> e
 pattern InvalidFuncType a <- (fromInvalidFuncType @e @i -> Just (Dict, a))
   where
     InvalidFuncType a = invalidFuncType @e a
 
 pattern InvalidFinalParam :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Name -> Type -> e
 pattern InvalidFinalParam a  b<- (fromInvalidFinalParam @e @i -> Just (Dict, (a,b)))
   where
     InvalidFinalParam a = invalidFinalParam @e a
 
 pattern FunctionWithNoParams :: forall e i. (InternalErr e, GetInternalErr e i)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => e
 pattern FunctionWithNoParams <- (fromFunctionWithNoParams @e @i -> Just (Dict, ()))
   where
@@ -359,7 +359,7 @@ pattern WithinClass :: forall e i. ( InternalErr i
                                    , InternalErr e
                                    , GetInternalErr e i
                                    , GetInternalErr i e)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Name -> i -> e
 pattern WithinClass a b <- (fromWithinClass @e @i -> Just (Dict, (a,b)))
   where
@@ -369,7 +369,7 @@ pattern WithinFunction :: forall e i. ( InternalErr i
                                      , InternalErr e
                                      , GetInternalErr e i
                                      , GetInternalErr i e)
-                    => (ClassConstraints)
+                    => (CCIntE)
                     => Name -> i -> e
 pattern WithinFunction a b <- (fromWithinFunction @e @i -> Just (Dict, (a,b)))
   where
@@ -377,7 +377,7 @@ pattern WithinFunction a b <- (fromWithinFunction @e @i -> Just (Dict, (a,b)))
 
 -- * Convenience Functions for working with MonadError instances
 
-throwNonClassInfo :: ( FuncConstraints
+throwNonClassInfo :: ( FCIntE
                      , InternalErr e
                      , MonadError e m
                      ) => Info -> m a
