@@ -24,6 +24,8 @@ module Type.Set.Variant
 
     -- * Decomposition proofs
   , decompRoot
+  , proveMemberLeft
+  , proveMemberRight
   , Split (..)
   , ForAllIn(..)
 
@@ -43,6 +45,12 @@ import Data.Kind
 import Data.Constraint
 import Type.Reflection
 import Unsafe.Coerce
+
+proveMemberLeft :: Follow ('L ': ss) ('Branch a l r) :~~: Follow ss l
+proveMemberLeft = unsafeCoerce HRefl
+
+proveMemberRight :: Follow ('R ': ss) ('Branch a l r) :~~: Follow ss r
+proveMemberRight = unsafeCoerce HRefl
 
 ------------------------------------------------------------------------------
 -- | A proof that `ForAllIn c bst` implies `c (Follow ss bst)`.

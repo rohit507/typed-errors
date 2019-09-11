@@ -12,45 +12,22 @@ import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
 
+data TyVars
+data ErrTyVar
+data FunDeps
+data ClsFunc (bst :: TypeSet (* -> *))
 
-data ClassInfo
-data GADTInfo
 
-class HKD (f :: * -> *) (a :: *) | f -> a where
-  type HKD f a :: *
-  toHKD :: f a -> HKD f a
-  fromHKD :: HKD f a -> f a
+data ClassInfo bst = ClassInfo {
+    tyVars :: Anns bst TyVars
+  , errTyVar :: Anns bst ErrTyVar
+  , funDeps :: Anns bst FunDeps
+  , clsFuncs :: Map Name (Anns bst ClsFunc)
+  }
 
-instance {-# OVERLAPPING #-} HKD Identity a where
-  type HKD Identity a = a
-  toHKD = runIdentity
-  fromHKD = Identity
 
-instance HKD f a where
-  type HKD f a = f a
-  toHKD = id
-  fromHKD = id
 
-data AllSet (bst :: TypeSet (* -> *)) where
-  AEmpty :: AllSet 'Empty a
-  ABranch :: f a -> AllSet l a -> AllSet r a -> AllSet ('Branch f l r) a
-
-insertAS :: forall f a bst. HKD f a -> AllSet bst a -> AllSet (Insert f bst) a
-insertAS = undefined
-
-retrieveAS :: forall f a bst. (Member f bst ~ 'True) => AllSet bst -> f a
-retrieveAS = undefined
-
-fmapAS :: (ForAllIn Functor bst) => a -> b -> AllSet bst a -> AllSet bst b
-fmapAS = undefined
-
-apAS :: (ForAllIn Applicative bst) => AllSet bst (a -> b) -> AllSet bst a -> AllSet bst b
-apAS = undefined
-
-bindAS :: (ForAllIn Monad bst) => AllSet bst a -> (a -> AllSet bst b) -> AllSet bst b
-bindAS = undefined
-
-genClassInfo :: Info -> REQ (ClassInfo '[])
+genClassInfo :: Info -> REQ (ClassInfo )
 genClassInfo = undefined
 
 genGADTDecs :: ClassInfo a -> REQ (ClassInfo (GADT ': a), [Dec])
