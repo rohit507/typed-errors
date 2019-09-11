@@ -12,19 +12,91 @@ import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
 
-data FuncInfo = FuncInfo {
-    name :: Name
-  , tyVars :: [TyVarBndr]
-  , ctxt :: Cxt
-  , params :: [Type]
-  }
 
-data ClassInfo = ClassInfo {
-     name :: Name
-   , tyVars :: [TyVarBndr]
-   , errTyVar :: TyVarBndr
-   , ctxt :: Cxt
-   }
+data ClassInfo
+data GADTInfo
+
+class HKD (f :: * -> *) (a :: *) | f -> a where
+  type HKD f a :: *
+  toHKD :: f a -> HKD f a
+  fromHKD :: HKD f a -> f a
+
+instance {-# OVERLAPPING #-} HKD Identity a where
+  type HKD Identity a = a
+  toHKD = runIdentity
+  fromHKD = Identity
+
+instance HKD f a where
+  type HKD f a = f a
+  toHKD = id
+  fromHKD = id
+
+data AllSet (bst :: TypeSet (* -> *)) where
+  AEmpty :: AllSet 'Empty a
+  ABranch :: f a -> AllSet l a -> AllSet r a -> AllSet ('Branch f l r) a
+
+insertAS :: forall f a bst. HKD f a -> AllSet bst a -> AllSet (Insert f bst) a
+insertAS = undefined
+
+retrieveAS :: forall f a bst. (Member f bst ~ 'True) => AllSet bst -> f a
+retrieveAS = undefined
+
+fmapAS :: (ForAllIn Functor bst) => a -> b -> AllSet bst a -> AllSet bst b
+fmapAS = undefined
+
+apAS :: (ForAllIn Applicative bst) => AllSet bst (a -> b) -> AllSet bst a -> AllSet bst b
+apAS = undefined
+
+bindAS :: (ForAllIn Monad bst) => AllSet bst a -> (a -> AllSet bst b) -> AllSet bst b
+bindAS = undefined
+
+genClassInfo :: Info -> REQ (ClassInfo '[])
+genClassInfo = undefined
+
+genGADTDecs :: ClassInfo a -> REQ (ClassInfo (GADT ': a), [Dec])
+genGADTDecs = undefined
+
+  where
+
+    genErrorTypeInst :: Dec
+    genErrorTypeInst = undefined
+
+    genGADTDef :: Dec
+    genGADTDef = undefined
+
+    genGADTConst :: Dec
+    genGADTConst = undefined
+
+genTErrClassInst :: (Has GADT e) => ClassInfo e -> REQ Dec
+genTErrClassInst = undefined
+
+  where
+
+    genMemberFunc :: Dec
+    genMemberFunc = undefined
+
+genGADTRewriteInst :: Has GADT e => ClassInfo e -> Req Dec
+genGADTRewriteInst = undefined
+
+  where
+
+    genRewriteClause :: Has GADT e => ConstInfo e -> REQ Clause
+    genRewriteClause = undefined
+
+genGetClass :: ClassInfo e -> REQ (ClassInfo (Insert GetClass e), Dec)
+genGetClass = undefined
+
+genGADTGetInst :: (Has GADT e, Has GetClass e) => ClassInfo e -> REQ Dec
+genGADTGetInst = undefined
+
+genTErrGetInst :: (Has GetClass e) => ClassInfo e -> Req Dec
+genTErrGetInst = undefined
+
+genErrPatterns :: (Has GADT e, Has GetClass e) => ClassInfo e -> REq  [Dec]
+genErrPatterns = undefined
+
+genThrowFuncs :: ClassInfo e -> REQ [Dec]
+genThrowFuncs = undefined
 
 
 
