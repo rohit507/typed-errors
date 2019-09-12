@@ -29,6 +29,9 @@ data FuncInfo f = FuncInfo
 type ClassInfo' l = ClassInfo (Anns l)
 type FuncInfo' l = FuncInfo (Anns l)
 
+class AddF e f hkd where
+  addF :: (MonadChronicle e m) => hkd f -> hkd (Anns l) -> m (hkd (Anns (f ': l)))
+
 type family HasL (m :: [k]) (l :: [k]) :: Constraint where
   HasL '[] l = ()
   HasL (s ': ss) l = (MembL s l, HasL ss l)
