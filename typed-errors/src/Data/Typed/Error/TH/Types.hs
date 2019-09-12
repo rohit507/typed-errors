@@ -81,6 +81,8 @@ data Context
   | FunDeps
   | InstDecs
   | Ctxt
+  | Knd
+  | Param
 
 data ClassInfo f = ClassInfo {
     ctxt      :: f 'Ctxt
@@ -93,6 +95,10 @@ data ClassInfo f = ClassInfo {
   }
 
 data FuncInfo f = FuncInfo {
+    cxt    :: f 'Ctxt
+  , name   :: f 'FnName
+  , tyVars :: f 'TyVars
+  , params :: [f 'Param]
   }
 
 type ClassInfo' l = ClassInfo (Anns l)
@@ -106,7 +112,13 @@ instance (MonadError e m) => AddF m FuncInfo where
 
   addF :: forall f l. (Typeable f)
     => FuncInfo f -> FuncInfo (Anns l) -> m (FuncInfo (Anns (f ': l)))
-  addF (FuncInfo) (FuncInfo) = pure FuncInfo
+  addF (FuncInfo ctxt  nm  tv  ps )
+       (FuncInfo ctxt' nm' tv' ps')
+    = pure $ FuncInfo
+      (putAnns ctxt ctxt')
+      (putAnns nm   nm'  )
+      (putAnns tv   tv'  )
+      (zipWith putAnns ps ps')
 
 instance (Applicative m, InternalErr e, MonadError e m) => AddF m ClassInfo where
 

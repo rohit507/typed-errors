@@ -34,6 +34,7 @@ class (CCIntE) => InternalErr e where
   extraFuncInfo        :: Name -> SomeTypeRep -> e
   withinClass          :: Name -> e -> e
   withinFunction       :: Name -> e -> e
+  -- paramMismatch :: ([Type], Maybe Type, [Type]) ->  ([Type], Maybe Type, [Type]) -> e
 
 -- * Associated GADT
 
