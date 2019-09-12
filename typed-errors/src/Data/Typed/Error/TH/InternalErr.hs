@@ -8,6 +8,7 @@ import Data.Typed.Error.Internal
 import Data.Constraint
 import Data.Functor.Classes
 import Prelude
+import Type.Reflection
 import Control.Monad.Error.Class
 import Text.Show
 
@@ -29,6 +30,8 @@ class (CCIntE) => InternalErr e where
   invalidFuncType      :: Type -> e
   invalidFinalParam    :: Name -> Type -> e
   functionWithNoParams :: e
+  missingFuncInfo      :: Name -> SomeTypeRep -> e
+  extraFuncInfo        :: Name -> SomeTypeRep -> e
   withinClass          :: Name -> e -> e
   withinFunction       :: Name -> e -> e
 
@@ -43,6 +46,8 @@ data InternalErrT e where
   InvalidFuncTypeT      :: (CCIntE) => Type -> InternalErrT e
   InvalidFinalParamT    :: (CCIntE) => Name -> Type -> InternalErrT e
   FunctionWithNoParamsT :: (CCIntE) => InternalErrT e
+  MissingFuncInfoT      :: (CCIntE) => Name -> SomeTypeRep -> InternalErrT e
+  ExtraFuncInfoT        :: (CCIntE) => Name -> SomeTypeRep -> InternalErrT e
   WithinClassT          :: (CCIntE) => Name -> e -> InternalErrT e
   WithinFunctionT       :: (CCIntE) => Name -> e -> InternalErrT e
 
@@ -59,6 +64,8 @@ instance (Eq Info, Eq Dec, Eq Name, Eq Type) => Eq1 InternalErrT where
  liftEq _  (InvalidFuncTypeT      a  ) (InvalidFuncTypeT      a'   ) = a == a'
  liftEq _  (InvalidFinalParamT    a b) (InvalidFinalParamT    a' b') = a == a' && b == b'
  liftEq _  (FunctionWithNoParamsT    ) (FunctionWithNoParamsT      ) = True
+ liftEq _  (MissingFuncInfoT      a b) (MissingFuncInfoT      a' b') = a == a' && b == b'
+ liftEq _  (ExtraFuncInfoT        a b) (ExtraFuncInfoT        a' b') = a == a' && b == b'
  liftEq eq (WithinClassT          a b) (WithinClassT          a' b') = a == a' && eq b b'
  liftEq eq (WithinFunctionT       a b) (WithinFunctionT       a' b') = a == a' && eq b b'
  liftEq _ _ _ = False
@@ -76,6 +83,8 @@ instance (Ord Info, Ord Dec, Ord Name, Ord Type) => Ord1 InternalErrT where
     (InvalidFuncTypeT      a  , InvalidFuncTypeT      a'   ) -> compare a a'
     (InvalidFinalParamT    a b, InvalidFinalParamT    a' b') -> compare a a' <> compare b b'
     (FunctionWithNoParamsT    , FunctionWithNoParamsT      ) -> EQ
+    (MissingFuncInfoT      a b, MissingFuncInfoT      a' b') -> compare a a' <> compare b b'
+    (ExtraFuncInfoT        a b, ExtraFuncInfoT        a' b') -> compare a a' <> compare b b'
     (WithinClassT          a b, WithinClassT          a' b') -> compare a a' <> cmp b b'
     (WithinFunctionT       a b, WithinFunctionT       a' b') -> compare a a' <> cmp b b'
     _ -> error "unreachable"
@@ -93,6 +102,9 @@ instance (Ord Info, Ord Dec, Ord Name, Ord Type) => Ord1 InternalErrT where
       constructorOrd (FunctionWithNoParamsT    ) = 7
       constructorOrd (WithinClassT          _ _) = 8
       constructorOrd (WithinFunctionT       _ _) = 9
+      constructorOrd (MissingFuncInfoT      _ _) = 10
+      constructorOrd (ExtraFuncInfoT        _ _) = 11
+
 
 instance (Ord Info, Ord Dec, Ord Name, Ord Type, Ord e) => Ord (InternalErrT e) where
   compare = compare1
@@ -129,6 +141,8 @@ instance Functor InternalErrT where
  fmap _ (InvalidFuncTypeT      a  ) = InvalidFuncTypeT      a
  fmap _ (InvalidFinalParamT    a b) = InvalidFinalParamT    a b
  fmap _ (FunctionWithNoParamsT    ) = FunctionWithNoParamsT
+ fmap _ (MissingFuncInfoT      a b) = MissingFuncInfoT      a b
+ fmap _ (ExtraFuncInfoT        a b) = ExtraFuncInfoT        a b
  fmap i (WithinClassT          a b) = WithinClassT          a (i b)
  fmap i (WithinFunctionT       a b) = WithinFunctionT       a (i b)
 
@@ -162,6 +176,8 @@ instance (CCIntE, HasError InternalErr p) => InternalErr (TypedError p) where
   invalidFuncType      a   = toError $ InvalidFuncTypeT   a
   invalidFinalParam    a b = toError $ InvalidFinalParamT a b
   functionWithNoParams     = toError $ FunctionWithNoParamsT
+  missingFuncInfo      a b = toError $ MissingFuncInfoT   a b
+  extraFuncInfo        a b = toError $ ExtraFuncInfoT     a b
   withinClass          a b = toError $ WithinClassT       a b
   withinFunction       a b = toError $ WithinFunctionT    a b
 
@@ -176,6 +192,8 @@ instance (InternalErr e) => RewriteError e InternalErrT where
   rewriteError (InvalidFuncTypeT      a  ) = invalidFuncType a
   rewriteError (InvalidFinalParamT    a b) = invalidFinalParam a b
   rewriteError (FunctionWithNoParamsT    ) = functionWithNoParams
+  rewriteError (MissingFuncInfoT      a b) = missingFuncInfo a b
+  rewriteError (ExtraFuncInfoT        a b) = extraFuncInfo a b
   rewriteError (WithinClassT          a b) = withinClass a b
   rewriteError (WithinFunctionT       a b) = withinFunction a b
 
@@ -418,6 +436,17 @@ throwFunctionWithNoParams :: ( InternalErr e
                              , MonadError e m
                              ) => m a
 throwFunctionWithNoParams = throwError functionWithNoParams
+
+throwMissingFuncInfo :: ( InternalErr e
+                       , MonadError e m
+                       ) => Name -> SomeTypeRep -> m a
+throwMissingFuncInfo a b = throwError $ missingFuncInfo a b
+
+throwExtraFuncInfo :: ( InternalErr e
+                      , MonadError e m
+                      ) => Name -> SomeTypeRep -> m a
+throwExtraFuncInfo a b = throwError $ extraFuncInfo a b
+
 
 whileWithinClass :: ( InternalErr e
                     , MonadError e m

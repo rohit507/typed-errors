@@ -16,10 +16,10 @@ dependencies:
   - intro
   - text
   - template-haskell
-  - monad-chronicle
   - mtl
   - either
   - cmptype
+  - containers
   - constraints >= 0.11 && < 1
   - type-sets
 

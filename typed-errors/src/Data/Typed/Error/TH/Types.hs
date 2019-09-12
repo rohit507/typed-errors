@@ -12,56 +12,15 @@ import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error
 import Type.Reflection
 import Data.Typed.Error.MonoidalErr
-import Control.Monad.Chronicle
+import qualified Data.Map as Map
+import qualified Data.Map.Merge.Lazy as Map
+
 
 instance CCIntE
 instance FCIntE
 
-type ClassName = String
-type GADTName = String
-type FuncName = String
-type GADTConsName = String
-type PatternName = String
 
--- | Options and Rules for generating typed errors.
-data TypedErrorRules = TypedErrorRules {
-    nameAssociatedGADT          :: ClassName -> GADTName
-  , nameGADTConstructors        :: ClassName -> FuncName -> GADTConsName
-  --, nameGADTInfixCons           :: ClassName -> FuncName -> GADTConsName
-  , nameClassPattern            :: ClassName -> PatternName
-  , nameConstructorPatterns     :: ClassName -> FuncName -> PatternName
-  , nameThrowFunction           :: ClassName -> FuncName -> FuncName
-  , nameWhileFunction           :: ClassName -> FuncName -> FuncName
-  --, makeEq1Instance             :: Bool
-  --, makeOrd1Instance            :: Bool
-  -- , makeShow1Instance           :: Bool
-  -- , forceInvalidShowInstance    :: Bool
-  -- , makeRead1Instance           :: Bool
-  -- , makeNFData1Instance         :: Bool
-  -- , makeHashable1Instance       :: Bool
-  , makeFunctorInstance         :: Bool
-  , makeFoldableInstance        :: Bool
-  , makeTraversableInstance     :: Bool
-  , makeTypedErrorClassInstance :: Bool
-  , makePatterns                :: Bool
-  , makeMonadErrorFuncs         :: Bool
-  }
-
-type REQErr = TypedError '[InternalErr, MonoidalErr]
-
-newtype REQ a where
-  REQ :: (ChronicleT REQErr (ReaderT TypedErrorRules Q)) a -> REQ a
-
-liftQ :: Q a -> REQ a
-liftQ = REQ . lift . lift
-
-deriving newtype instance Functor REQ
-deriving newtype instance Applicative REQ
-deriving newtype instance Monad REQ
-deriving newtype instance Alternative REQ
-deriving newtype instance MonadPlus REQ
-deriving newtype instance MonadChronicle REQErr REQ
-
+-- TODO :: Replace w/ an actual type error.
 class TErr
 
 type family MembL (a :: k) (ls :: [k]) :: Constraint where
@@ -89,16 +48,125 @@ getAnns = get
         Nothing -> (get ls :: f a)
 
 
+type ClassName = String
+type GADTName = String
+type FuncName = String
+type GADTConsName = String
+type PatternName = String
 
--- mergeAnns :: forall small large a. Anns small a -> Anns large a -> Anns (Merge small large) a
--- mergeAnns AEmpty l = l
--- mergeAnns s AEmpty = s
--- mergeAnns s l = merge s l
+-- | Options and Rules for generating typed errors.
+data TypedErrorRules = TypedErrorRules {
+  }
 
---   where
+type REQErr = TypedError '[InternalErr, MonoidalErr]
 
---     merge :: Anns s a -> Anns l a -> Anns (Merge s l) a
---     merge AEmpty l = unsafeCoerce $ l
---     merge s AEmpty = unsafeCoerce $ s
---     merge (ABranch f l r) large
-      -- = unsafeCoerce . merge r . merge l $ putAnn f large
+newtype REQ a where
+  REQ :: (ExceptT REQErr (ReaderT TypedErrorRules Q)) a -> REQ a
+
+liftQ :: Q a -> REQ a
+liftQ = REQ . lift . lift
+
+deriving newtype instance Functor REQ
+deriving newtype instance Applicative REQ
+deriving newtype instance Monad REQ
+deriving newtype instance Alternative REQ
+deriving newtype instance MonadPlus REQ
+deriving newtype instance MonadError REQErr REQ
+
+data Context
+  = ClName
+  | FnName
+  | TyVars
+  | ErrTyVar
+  | FunDeps
+  | InstDecs
+  | Ctxt
+
+data ClassInfo f = ClassInfo {
+    ctxt      :: f 'Ctxt
+  , name      :: f 'ClName
+  , tyVars    :: f 'TyVars
+  , errTyVar  :: f 'ErrTyVar
+  , funDeps   :: f 'FunDeps
+  , clsFuncs  :: Map Name (FuncInfo f)
+  , instances :: f 'InstDecs
+  }
+
+data FuncInfo f = FuncInfo {
+  }
+
+type ClassInfo' l = ClassInfo (Anns l)
+type FuncInfo' l = FuncInfo (Anns l)
+
+class AddF m hkd where
+  addF :: forall f l. (Typeable f)
+    => hkd f -> hkd (Anns l) -> m (hkd (Anns (f ': l)))
+
+instance (MonadError e m) => AddF m FuncInfo where
+
+  addF :: forall f l. (Typeable f)
+    => FuncInfo f -> FuncInfo (Anns l) -> m (FuncInfo (Anns (f ': l)))
+  addF (FuncInfo) (FuncInfo) = pure FuncInfo
+
+instance (Applicative m, InternalErr e, MonadError e m) => AddF m ClassInfo where
+
+  addF :: forall f l. (Typeable f)
+    => ClassInfo f -> ClassInfo (Anns l) -> m (ClassInfo (Anns (f ': l)))
+  addF (ClassInfo ctxt  nm  tv  etv  fd  fn  is )
+       (ClassInfo ctxt' nm' tv' etv' fd' fn' is')
+    = ClassInfo
+      <$> (pure $ putAnns ctxt ctxt')
+      <*> (pure $ putAnns nm   nm'  )
+      <*> (pure $ putAnns tv   tv'  )
+      <*> (pure $ putAnns etv  etv' )
+      <*> (pure $ putAnns fd   fd'  )
+      <*> (Map.mergeA
+            (Map.traverseMissing
+               $ \ k _ -> throwMissingFuncInfo k (someTypeRep $ typeRep @f))
+            (Map.traverseMissing
+               $ \ k _ -> throwExtraFuncInfo   k (someTypeRep $ typeRep @f))
+            (Map.zipWithAMatched
+               $ \ _ -> addF)
+            fn fn')
+      <*> (pure $ putAnns is   is'  )
+
+
+type family HasL (m :: [k]) (l :: [k]) :: Constraint where
+  HasL '[] l = ()
+  HasL (s ': ss) l = (MembL s l, HasL ss l)
+
+type family Class (a :: Context) :: * where
+  Class 'Ctxt     = Cxt
+  Class 'ClName   = Name
+  Class 'FnName   = ()
+  Class 'TyVars   = [TyVarBndr]
+  Class 'ErrTyVar = Name
+  Class 'FunDeps  = [FunDep]
+  Class 'InstDecs = [InstanceDec]
+
+type family GADT (a :: Context) :: * where
+  GADT 'Ctxt     = ()
+  GADT 'ClName   = ()
+  GADT 'FnName   = ()
+  GADT 'TyVars   = ()
+  GADT 'ErrTyVar = ()
+  GADT 'FunDeps  = ()
+  GADT 'InstDecs = ()
+
+type family GetClass (a :: Context) :: * where
+  GetClass 'Ctxt     = ()
+  GetClass 'ClName   = ()
+  GetClass 'FnName   = ()
+  GetClass 'TyVars   = ()
+  GetClass 'ErrTyVar = ()
+  GetClass 'FunDeps  = ()
+  GetClass 'InstDecs = ()
+
+type family Pattern (a :: Context) :: * where
+  Pattern 'Ctxt     = ()
+  Pattern 'ClName   = ()
+  Pattern 'FnName   = ()
+  Pattern 'TyVars   = ()
+  Pattern 'ErrTyVar = ()
+  Pattern 'FunDeps  = ()
+  Pattern 'InstDecs = ()

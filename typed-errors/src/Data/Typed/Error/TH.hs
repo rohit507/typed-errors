@@ -11,41 +11,29 @@ import Type.Set.VariantF
 import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
-import Control.Monad.Chronicle
+import Data.Typed.Error.MonoidalErr
+import qualified Data.Map as Map
+import qualified Data.Map.Merge.Lazy as Map
+import Type.Reflection
 
-data TyVars
-data ErrTyVar
-data FunDeps
-data ClsFunc
 
-data ClassInfo f = ClassInfo {
-    tyVars :: f TyVars
-  , errTyVar :: f ErrTyVar
-  , funDeps :: f FunDeps
-  , clsFuncs :: Map Name (FuncInfo f)
-  }
+genClassInfo :: MembL Class l => Info -> REQ (ClassInfo Class)
+genClassInfo (ClassI d i) = case d of
+  ClassD _ name [] _ _ -> whileWithinClass name $ throwMissingErrorTyVa
+  ClassD cxt name tyVars funDeps dec
+    -> whileWithinClass name $ do
 
-data FuncInfo f = FuncInfo
 
-type ClassInfo' l = ClassInfo (Anns l)
-type FuncInfo' l = FuncInfo (Anns l)
+  d' -> throwNonClassDec d'
+  where
 
-class AddF e f hkd where
-  addF :: (MonadChronicle e m) => hkd f -> hkd (Anns l) -> m (hkd (Anns (f ': l)))
 
-type family HasL (m :: [k]) (l :: [k]) :: Constraint where
-  HasL '[] l = ()
-  HasL (s ': ss) l = (MembL s l, HasL ss l)
 
-data Class a
-data GADT  a
-data GetClass a
+genClassInfo i = throwNonClassInfo i
 
-genClassInfo :: MembL Class l => Info -> REQ (ClassInfo' l)
-genClassInfo = undefined
 
 genGADTDecs :: (HasL '[Class] l)
-  => ClassInfo' l -> REQ (ClassInfo' (GADT ': l), [Dec])
+  => ClassInfo' l -> REQ (ClassInfo GADT, [Dec])
 genGADTDecs = undefined
 
   where
@@ -84,7 +72,8 @@ genGADTGetInst = undefined
 genTErrGetInst :: (HasL '[GetClass] l) => ClassInfo' l -> REQ Dec
 genTErrGetInst = undefined
 
-genErrPatterns :: (HasL '[GADT,GetClass] l) => ClassInfo' l -> REQ [Dec]
+genErrPatterns :: (HasL '[GADT,GetClass] l)
+  => ClassInfo' l -> REQ (ClassInfo' (Pattern ': l), [Dec])
 genErrPatterns = undefined
 
 genThrowFuncs ::  (HasL '[Class] l) => ClassInfo' l -> REQ [Dec]
