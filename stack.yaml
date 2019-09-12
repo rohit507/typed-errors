@@ -39,11 +39,12 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-  - type-sets/
   - cmptype-0.2.0.0
   - magic-tyfams-0.1.1.0
-  - constraints-0.11.1
+  - constraints-0.11
   - monad-chronicle-1
+  - github: isovector/type-sets
+    commit: 3f5c0b197bf4ba3fac9c07011be90550f2999c32
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

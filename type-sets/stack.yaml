@@ -1,7 +1,0 @@
-resolver: lts-13.0
-
-packages:
-- .
-- cmptype
-- magic-tyfams
-
