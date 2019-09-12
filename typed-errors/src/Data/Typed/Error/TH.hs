@@ -12,26 +12,36 @@ import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
 
-{-
 data TyVars
 data ErrTyVar
 data FunDeps
-data ClsFunc (bst :: TypeSet (* -> *))
+data ClsFunc
 
-
-data ClassInfo bst = ClassInfo {
-    tyVars :: Anns bst TyVars
-  , errTyVar :: Anns bst ErrTyVar
-  , funDeps :: Anns bst FunDeps
-  , clsFuncs :: Map Name (Anns bst ClsFunc)
+data ClassInfo f = ClassInfo {
+    tyVars :: f TyVars
+  , errTyVar :: f ErrTyVar
+  , funDeps :: f FunDeps
+  , clsFuncs :: Map Name (FuncInfo f)
   }
 
+data FuncInfo f = FuncInfo
 
+type ClassInfo' l = ClassInfo (Anns l)
+type FuncInfo' l = FuncInfo (Anns l)
 
-genClassInfo :: Info -> REQ (ClassInfo )
+type family HasL (m :: [k]) (l :: [k]) :: Constraint where
+  HasL '[] l = ()
+  HasL (s ': ss) l = (MembL s l, HasL ss l)
+
+data Class a
+data GADT  a
+data GetClass a
+
+genClassInfo :: MembL Class l => Info -> REQ (ClassInfo' l)
 genClassInfo = undefined
 
-genGADTDecs :: ClassInfo a -> REQ (ClassInfo (GADT ': a), [Dec])
+genGADTDecs :: (HasL '[Class] l)
+  => ClassInfo' l -> REQ (ClassInfo' (GADT ': l), [Dec])
 genGADTDecs = undefined
 
   where
@@ -45,7 +55,7 @@ genGADTDecs = undefined
     genGADTConst :: Dec
     genGADTConst = undefined
 
-genTErrClassInst :: (Has GADT e) => ClassInfo e -> REQ Dec
+genTErrClassInst :: (HasL '[Class,GADT] l) => ClassInfo' l -> REQ Dec
 genTErrClassInst = undefined
 
   where
@@ -53,27 +63,27 @@ genTErrClassInst = undefined
     genMemberFunc :: Dec
     genMemberFunc = undefined
 
-genGADTRewriteInst :: Has GADT e => ClassInfo e -> Req Dec
+genGADTRewriteInst :: (HasL '[Class,GADT] l) => ClassInfo' l -> REQ Dec
 genGADTRewriteInst = undefined
 
   where
 
-    genRewriteClause :: Has GADT e => ConstInfo e -> REQ Clause
+    genRewriteClause :: FuncInfo' l -> REQ Clause
     genRewriteClause = undefined
 
-genGetClass :: ClassInfo e -> REQ (ClassInfo (Insert GetClass e), Dec)
+genGetClass :: (HasL '[Class] l) => ClassInfo' l -> REQ (ClassInfo' (GetClass ': l), Dec)
 genGetClass = undefined
 
-genGADTGetInst :: (Has GADT e, Has GetClass e) => ClassInfo e -> REQ Dec
+genGADTGetInst :: (HasL '[GADT, GetClass] l ) => ClassInfo' l -> REQ Dec
 genGADTGetInst = undefined
 
-genTErrGetInst :: (Has GetClass e) => ClassInfo e -> Req Dec
+genTErrGetInst :: (HasL '[GetClass] l) => ClassInfo' l -> REQ Dec
 genTErrGetInst = undefined
 
-genErrPatterns :: (Has GADT e, Has GetClass e) => ClassInfo e -> REq  [Dec]
+genErrPatterns :: (HasL '[GADT,GetClass] l) => ClassInfo' l -> REQ [Dec]
 genErrPatterns = undefined
 
-genThrowFuncs :: ClassInfo e -> REQ [Dec]
+genThrowFuncs ::  (HasL '[Class] l) => ClassInfo' l -> REQ [Dec]
 genThrowFuncs = undefined
 
 
@@ -151,5 +161,4 @@ deriveErrorTypes n = do
 --       Functor, Foldable, Traversable and Typeable instances for each type.
 --   - Generate the pattern synonyms
 --   - Generate the throw/while functions for the class.
--}
 -}
