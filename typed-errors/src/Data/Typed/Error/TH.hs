@@ -12,6 +12,7 @@ import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
 
+{-
 data TyVars
 data ErrTyVar
 data FunDeps
@@ -150,4 +151,5 @@ deriveErrorTypes n = do
 --       Functor, Foldable, Traversable and Typeable instances for each type.
 --   - Generate the pattern synonyms
 --   - Generate the throw/while functions for the class.
+-}
 -}

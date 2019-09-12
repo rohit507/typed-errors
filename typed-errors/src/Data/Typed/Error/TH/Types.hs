@@ -1,6 +1,7 @@
 
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE UndecidableSuperClasses  #-}
 {-# LANGUAGE AllowAmbiguousTypes  #-}
 
 module Data.Typed.Error.TH.Types where
@@ -12,9 +13,6 @@ import Data.Typed.Error
 import Type.Reflection
 import Data.Typed.Error.MonoidalErr
 import Control.Monad.Chronicle
-import Type.Set
-import Type.Set.Variant
-import Unsafe.Coerce
 
 instance CCIntE
 instance FCIntE
@@ -64,34 +62,33 @@ deriving newtype instance Alternative REQ
 deriving newtype instance MonadPlus REQ
 deriving newtype instance MonadChronicle REQErr REQ
 
+class TErr
 
-data Anns (bst :: TypeSet (k -> *)) (a :: k) where
-  AEmpty  :: Anns 'Empty a
-  ABranch :: f a -> Anns l a -> Anns r a -> Anns ('Branch f l r) a
+type family MembL (a :: k) (ls :: [k]) :: Constraint where
+  MembL a (a ': ls) = ()
+  MembL a (b ': ls) = MembL a ls
+  MembL a '[] = TErr
 
-putAnn :: forall (f :: k -> *) (bst :: TypeSet (k -> *)) a.
-  (FromSides (Locate f (Insert f bst)))
-  => f a -> Anns bst a -> Anns (Insert f bst) a
-putAnn = put (toSideList $ fromSides @(Locate f (Insert f bst)))
+data Anns (bst :: [k -> *]) (a :: k) where
+  ANil  :: Anns '[] a
+  ACons :: Typeable f => f a -> Anns l a -> Anns (f ': l) a
+
+putAnns :: Typeable f => f a -> Anns l a -> Anns (f ': l) a
+putAnns = ACons
+
+getAnns :: forall f l a. (Typeable f, MembL f l) => Anns l a -> f a
+getAnns = get
 
   where
 
-    put :: forall f bst a. [Side] -> f a -> Anns bst a -> Anns (Insert f bst) a
-    put _ f AEmpty = unsafeCoerce $ ABranch f AEmpty AEmpty
-    put [] f (ABranch g l r) = unsafeCoerce $ ABranch f l r
-    put (L : ss) f (ABranch g l r) = unsafeCoerce $ ABranch f (put ss f l) r
-    put (R : ss) f (ABranch g l r) = unsafeCoerce $ ABranch f l (put ss f r)
+    get :: forall l. Anns l a -> f a
+    get ANil = panic "unreachable"
+    get (ACons (g :: g a) (ls :: Anns ls a))
+      = case eqTypeRep (typeRep @f) (typeRep @g) of
+        Just HRefl -> g
+        Nothing -> (get ls :: f a)
 
-getAnn :: forall (f :: k -> *) (bst :: TypeSet (k -> *)) a.
-  (FromSides (Locate f bst)) => Anns bst a -> f a
-getAnn = get (toSideList $ fromSides @(Locate f bst))
-  where
-    get :: forall f bst a. [Side] -> Anns bst a -> f a
 
-    get _ AEmpty = panic "unreachable"
-    get []  (ABranch g l r) = unsafeCoerce g
-    get (L : ss) (ABranch g l r) = unsafeCoerce $ get ss l
-    get (R : ss) (ABranch g l r) = unsafeCoerce $ get ss r
 
 -- mergeAnns :: forall small large a. Anns small a -> Anns large a -> Anns (Merge small large) a
 -- mergeAnns AEmpty l = l
