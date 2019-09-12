@@ -11,6 +11,7 @@ import Type.Set.VariantF
 import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
+import Control.Monad.Chronicle
 
 data TyVars
 data ErrTyVar
