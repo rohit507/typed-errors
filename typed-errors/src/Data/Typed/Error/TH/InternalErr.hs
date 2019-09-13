@@ -458,3 +458,23 @@ whileWithinFunction :: ( InternalErr e
                       , MonadError e m
                       ) => Name -> m a -> m a
 whileWithinFunction a m = catchError m (throwError . withinFunction a)
+
+throwInvalidClassDec :: ( InternalErr e
+        , MonadError e m
+        ) => Dec -> m a
+throwInvalidClassDec a = undefined -- throwError $ extraFuncInfo a b
+
+throwInvalidClassNameForGADT :: ( InternalErr e
+        , MonadError e m
+        ) => Name -> m a
+throwInvalidClassNameForGADT a = undefined -- throwError $ extraFuncInfo a b
+
+throwInvalidFuncNameForGADT :: ( InternalErr e
+        , MonadError e m
+        ) => Name -> Name -> m a
+throwInvalidFuncNameForGADT a = undefined -- throwError $ extraFuncInfo a b
+
+whileBuildingGADT :: ( InternalErr e
+                      , MonadError e m
+                      ) => Name -> m a -> m a
+whileBuildingGADT a m = undefined -- catchError m (throwError . withinFunction a)

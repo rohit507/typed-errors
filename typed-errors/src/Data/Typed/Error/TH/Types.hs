@@ -6,7 +6,7 @@
 
 module Data.Typed.Error.TH.Types where
 
-import Intro
+import Intro hiding (Type)
 import Language.Haskell.TH
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error
@@ -54,8 +54,17 @@ type FuncName = String
 type GADTConsName = String
 type PatternName = String
 
--- | Options and Rules for generating typed errors.
+-- | What do we do when we cannot make a constructor out of a function. (C fcxt
+data GADTConsPolicy
+  = SkipSilently
+  | SkipWithWarning
+  | NoSkip
+
 data TypedErrorRules = TypedErrorRules {
+    nameGADT :: ClassName -> Maybe (GADTName)
+    -- | constructors without a matching name will not be produced.
+  , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
+  , gadtConsPolicy :: GADTConsPolicy
   }
 
 type REQErr = TypedError '[InternalErr, MonoidalErr]
@@ -84,7 +93,7 @@ data Context
   | Knd
   | Param
 
-data ClassInfo f = ClassInfo {
+data ClassInfo (f :: Context -> *) = ClassInfo {
     ctxt      :: f 'Ctxt
   , name      :: f 'ClName
   , tyVars    :: f 'TyVars
@@ -94,7 +103,7 @@ data ClassInfo f = ClassInfo {
   , instances :: f 'InstDecs
   }
 
-data FuncInfo f = FuncInfo {
+data FuncInfo (f :: Context -> *) = FuncInfo {
     cxt    :: f 'Ctxt
   , name   :: f 'FnName
   , tyVars :: f 'TyVars
@@ -143,42 +152,71 @@ instance (Applicative m, InternalErr e, MonadError e m) => AddF m ClassInfo wher
       <*> (pure $ putAnns is   is'  )
 
 
+
 type family HasL (m :: [k]) (l :: [k]) :: Constraint where
   HasL '[] l = ()
   HasL (s ': ss) l = (MembL s l, HasL ss l)
 
-type family Class (a :: Context) :: * where
-  Class 'Ctxt     = Cxt
-  Class 'ClName   = Name
-  Class 'FnName   = ()
-  Class 'TyVars   = [TyVarBndr]
-  Class 'ErrTyVar = Name
-  Class 'FunDeps  = [FunDep]
-  Class 'InstDecs = [InstanceDec]
+type family C (a :: Context) :: * where
+  C 'Ctxt     = Cxt
+  C 'ClName   = Name
+  C 'FnName   = Name
+  C 'TyVars   = [TyVarBndr]
+  C 'ErrTyVar = TyVarBndr
+  C 'FunDeps  = [FunDep]
+  C 'InstDecs = [InstanceDec]
+  C 'Knd      = ()
+  C 'Param    = Type
 
-type family GADT (a :: Context) :: * where
-  GADT 'Ctxt     = ()
-  GADT 'ClName   = ()
-  GADT 'FnName   = ()
-  GADT 'TyVars   = ()
-  GADT 'ErrTyVar = ()
-  GADT 'FunDeps  = ()
-  GADT 'InstDecs = ()
+data Class a where
+  C :: { getC :: C a } -> Class a
 
-type family GetClass (a :: Context) :: * where
-  GetClass 'Ctxt     = ()
-  GetClass 'ClName   = ()
-  GetClass 'FnName   = ()
-  GetClass 'TyVars   = ()
-  GetClass 'ErrTyVar = ()
-  GetClass 'FunDeps  = ()
-  GetClass 'InstDecs = ()
+deriving instance (Eq (C a)) => Eq (Class a)
 
-type family Pattern (a :: Context) :: * where
-  Pattern 'Ctxt     = ()
-  Pattern 'ClName   = ()
-  Pattern 'FnName   = ()
-  Pattern 'TyVars   = ()
-  Pattern 'ErrTyVar = ()
-  Pattern 'FunDeps  = ()
-  Pattern 'InstDecs = ()
+type family G (a :: Context) :: * where
+  G 'Ctxt     = ()
+  G 'ClName   = ()
+  G 'FnName   = ()
+  G 'TyVars   = ()
+  G 'ErrTyVar = ()
+  G 'FunDeps  = ()
+  G 'InstDecs = ()
+  G 'Knd      = ()
+  G 'Param    = ()
+
+data GADT a where
+  G :: { getG :: G a }-> GADT a
+
+deriving instance (Eq (G a)) => Eq (GADT a)
+
+type family GC (a :: Context) :: * where
+  GC 'Ctxt     = ()
+  GC 'ClName   = ()
+  GC 'FnName   = ()
+  GC 'TyVars   = ()
+  GC 'ErrTyVar = ()
+  GC 'FunDeps  = ()
+  GC 'InstDecs = ()
+  GC 'Knd      = ()
+  GC 'Param    = ()
+
+data GetClass a where
+  GC :: { getGC :: GC a }-> GetClass a
+
+deriving instance (Eq (GC a)) => Eq (GetClass a)
+
+type family P (a :: Context) :: * where
+  P 'Ctxt     = ()
+  P 'ClName   = ()
+  P 'FnName   = ()
+  P 'TyVars   = ()
+  P 'ErrTyVar = ()
+  P 'FunDeps  = ()
+  P 'InstDecs = ()
+  P 'Knd      = ()
+  P 'Param    = ()
+
+data Pattern a where
+  P :: { getP :: P a } -> Pattern a
+
+deriving instance (Eq (P a)) => Eq (Pattern a)

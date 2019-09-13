@@ -17,35 +17,91 @@ import qualified Data.Map.Merge.Lazy as Map
 import Type.Reflection
 
 
-genClassInfo :: MembL Class l => Info -> REQ (ClassInfo Class)
+genClassInfo :: Info -> REQ (ClassInfo Class)
 genClassInfo (ClassI d i) = case d of
-  ClassD _ name [] _ _ -> whileWithinClass name $ throwMissingErrorTyVa
+  ClassD _ name [] _ _ -> whileWithinClass name $ throwMissingErrorTyVar
   ClassD cxt name tyVars funDeps dec
     -> whileWithinClass name $ do
-
-
+      (cTyVs, eTyV) <- splitTyVars tyVars
+      ClassInfo
+        <$> (pure $ C cxt)
+        <*> (pure $ C name)
+        <*> (pure $ C cTyVs)
+        <*> (pure $ C eTyV)
+        <*> (pure $ C funDeps)
+        <*> (Map.fromList <$> traverse (genFuncInfo tyVars cxt) dec)
+        <*> (pure $ C i)
   d' -> throwNonClassDec d'
   where
 
+    splitTyVars :: [TyVarBndr] -> REQ ([TyVarBndr], TyVarBndr)
+    splitTyVars l = case lastMay l of
+      Nothing   -> throwMissingErrorTyVar
+      Just eTyV -> pure (initDef [] l,eTyV)
 
+    genFuncInfo :: C 'TyVars -> C 'Ctxt ->  Dec
+      -> REQ (Name, FuncInfo Class)
+    genFuncInfo t c (SigD nm typ)
+      = let (a,b,ps) = extrFromTyp t c typ in
+          pure . (nm,) $
+            FuncInfo
+              (C $ fromMaybe [] a)
+              (C nm)
+              (C $ fromMaybe mempty b)
+              (map C ps :: [Class 'Param])
+    genFuncInfo _ _ n = throwInvalidClassDec n
+
+    extrFromTyp :: C 'TyVars -> C 'Ctxt -> Type
+        -> (Maybe (C 'Ctxt), Maybe (C 'TyVars), [C 'Param])
+    extrFromTyp ctv ccxt (ForallT ftv fcxt typ)
+      | ftv == ctv && ccxt == fcxt = extrFromTyp ctv ccxt typ
+      | otherwise = extrFromTyp ftv fcxt typ
+    extrFromTyp ctv ccxt (AppT p t)
+      = let (a,b,ps) = extrFromTyp ctv ccxt t in (a,b,p : ps)
+    extrFromTyp _ _ t = (Nothing, Nothing, [t])
 
 genClassInfo i = throwNonClassInfo i
 
+nameToStr :: Name -> String
+nameToStr = undefined
 
-genGADTDecs :: (HasL '[Class] l)
-  => ClassInfo' l -> REQ (ClassInfo GADT, [Dec])
-genGADTDecs = undefined
+tyVarName :: TyVarBndr -> Name
+tyVarName = undefined
+
+appTypes :: Type -> [Type] -> Type
+appTypes n v = foldr AppT n v
+
+genGADTDecs :: ClassInfo Class -> REQ (ClassInfo GADT, [Dec])
+genGADTDecs (ClassInfo (C ctxt) (C nm) (C tv) (C etv) (C fd) fn (C inst))
+  = whileBuildingGADT nm $ do
+      (ci,gName,gDec) <- genGADTDef
+
+      etDec <- errorTypeInst gName
+      pure (ci,[gDec,etDec])
 
   where
 
-    genErrorTypeInst :: Dec
-    genErrorTypeInst = undefined
+    errorTypeInst :: Name -> REQ Dec
+    errorTypeInst gnm = do
+      vars <- traverse (map VarT . liftQ . newName . nameBase . tyVarName) tv
+      pure . TySynInstD ''ErrorType . TySynEqn vars $ appTypes (ConT gnm) vars
 
-    genGADTDef :: Dec
-    genGADTDef = undefined
+    genGADTDef :: REQ (ClassInfo GADT, Name, Dec)
+    genGADTDef = do
+      gName <- (nameGADT <$> ask) <*> pure (nameToStr nm) >>= \case
+        Nothing -> throwInvalidClassNameForGADT nm
+        Just a  -> pure $ mkName a
+      cons <- traverse genGADTConst fn
 
-    genGADTConst :: Dec
-    genGADTConst = undefined
+      let dec = DataD mempty
+          ci = undefined
+      pure (ci,gName, dec)
+
+    genGADTConst :: FuncInfo Class -> REQ (FuncInfo GADT, Con)
+    genGADTConst (FuncInfo (C fCxt) (C fn) (C fty) p) = do
+     (nameGADTCons <$> ask) <$> (pure $ nameBase nm) <*> (pure $ nameBase fn) >>= \case
+        Nothing -> throwInvalidFuncNameForGADT nm fn
+        Just a  -> pure $ mkName
 
 genTErrClassInst :: (HasL '[Class,GADT] l) => ClassInfo' l -> REQ Dec
 genTErrClassInst = undefined
