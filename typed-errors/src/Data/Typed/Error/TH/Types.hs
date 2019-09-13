@@ -20,46 +20,24 @@ import qualified Data.Map.Merge.Lazy as Map
 instance CCIntE
 instance FCIntE
 
-
--- TODO :: Replace w/ an actual type error.
-class TErr
-
-type family MembL (a :: k) (ls :: [k]) :: Constraint where
-  MembL a (a ': ls) = ()
-  MembL a (b ': ls) = MembL a ls
-  MembL a '[] = TErr
-
-data Anns (bst :: [k -> *]) (a :: k) where
-  ANil  :: Anns '[] a
-  ACons :: Typeable f => f a -> Anns l a -> Anns (f ': l) a
-
-putAnns :: Typeable f => f a -> Anns l a -> Anns (f ': l) a
-putAnns = ACons
-
-getAnns :: forall f l a. (Typeable f, MembL f l) => Anns l a -> f a
-getAnns = get
-
-  where
-
-    get :: forall l. Anns l a -> f a
-    get ANil = panic "unreachable"
-    get (ACons (g :: g a) (ls :: Anns ls a))
-      = case eqTypeRep (typeRep @f) (typeRep @g) of
-        Just HRefl -> g
-        Nothing -> (get ls :: f a)
-
-
 type ClassName = String
 type GADTName = String
 type FuncName = String
 type GADTConsName = String
 type PatternName = String
 
-
 data TypedErrorRules = TypedErrorRules {
     nameGADT :: ClassName -> Maybe (GADTName)
     -- | constructors without a matching name will not be produced.
   , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
+  , dryRun :: Bool
+  }
+
+defTER :: TypedErrorRules
+defTER = TypedErrorRules {
+    nameGADT = defNameGADT
+  , nameGADTCons = defNameGADTCons
+  , dryRun = True
   }
 
 defNameGADT :: ClassName -> Maybe GADTName
@@ -69,8 +47,6 @@ defNameGADT [] = Nothing
 defNameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
 defNameGADTCons _ = defNameGADT
 
-defTER :: TypedErrorRules
-defTER = TypedErrorRules defNameGADT defNameGADTCons
 
 type REQErr = TypedError '[InternalErr,MonoidalErr]
 
@@ -120,52 +96,6 @@ data FuncInfo (f :: Context -> *) = FuncInfo {
   , params :: [f 'Param]
   }
 
-type ClassInfo' l = ClassInfo (Anns l)
-type FuncInfo' l = FuncInfo (Anns l)
-
-class AddF m hkd where
-  addF :: forall f l. (Typeable f)
-    => hkd f -> hkd (Anns l) -> m (hkd (Anns (f ': l)))
-
-instance (MonadError e m) => AddF m FuncInfo where
-
-  addF :: forall f l. (Typeable f)
-    => FuncInfo f -> FuncInfo (Anns l) -> m (FuncInfo (Anns (f ': l)))
-  addF (FuncInfo ctxt  nm  tv  ps )
-       (FuncInfo ctxt' nm' tv' ps')
-    = pure $ FuncInfo
-      (putAnns ctxt ctxt')
-      (putAnns nm   nm'  )
-      (putAnns tv   tv'  )
-      (zipWith putAnns ps ps')
-
-instance (Applicative m, InternalErr e, MonadError e m) => AddF m ClassInfo where
-
-  addF :: forall f l. (Typeable f)
-    => ClassInfo f -> ClassInfo (Anns l) -> m (ClassInfo (Anns (f ': l)))
-  addF (ClassInfo ctxt  nm  tv  etv  fd  fn  is )
-       (ClassInfo ctxt' nm' tv' etv' fd' fn' is')
-    = ClassInfo
-      <$> (pure $ putAnns ctxt ctxt')
-      <*> (pure $ putAnns nm   nm'  )
-      <*> (pure $ putAnns tv   tv'  )
-      <*> (pure $ putAnns etv  etv' )
-      <*> (pure $ putAnns fd   fd'  )
-      <*> (Map.mergeA
-            (Map.traverseMissing
-               $ \ k _ -> throwMissingFuncInfo k (someTypeRep $ typeRep @f))
-            (Map.traverseMissing
-               $ \ k _ -> throwExtraFuncInfo   k (someTypeRep $ typeRep @f))
-            (Map.zipWithAMatched
-               $ \ _ -> addF)
-            fn fn')
-      <*> (pure $ putAnns is   is'  )
-
-
-
-type family HasL (m :: [k]) (l :: [k]) :: Constraint where
-  HasL '[] l = ()
-  HasL (s ': ss) l = (MembL s l, HasL ss l)
 
 type family C (a :: Context) :: * where
   C 'Ctxt     = Cxt

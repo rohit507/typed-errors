@@ -534,3 +534,8 @@ whileBuildingGADT :: ( InternalErr e
                       , MonadError e m
                       ) => Name -> m a -> m a
 whileBuildingGADT a m = m  -- catchError m (throwError . withinFunction a)
+
+whileBuildingClassInst :: ( InternalErr e
+                      , MonadError e m
+                      ) => Name -> m a -> m a
+whileBuildingClassInst a m = m  -- catchError m (throwError . withinFunction a)

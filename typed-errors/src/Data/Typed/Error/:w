@@ -25,8 +25,7 @@ testAnn n = do
     ci <- genClassInfo i
     (gi, gds) <- genGADTDecs ci
     teids <- genTErrClassInst ci gi
-    grids   <- genGADTRewriteInst ci gi
-    pure $ gds <> [teids,grids]
+    pure $ gds <> [teids]
   case res of
     Left e -> do
       reportError $ show e
@@ -60,8 +59,8 @@ genClassInfo (ClassI d i) = case d of
     genFuncInfo :: C 'TyVars -> C 'Ctxt ->  Dec
       -> REQ (Name, FuncInfo Class)
     genFuncInfo t c (SigD nm typ)
-      = let (a,b,ps) = extrFromTyp t c typ in do
-          -- liftQ . reportError . show . ppr $ a
+      = let (a,b,ps) = extrFromTyp t c typ in
+          -- liftQ . reportError . show . ppr $ typ
           -- liftQ . reportError . show $ a
           -- liftQ . reportError . show $ b
           -- liftQ . reportError . show . ppr $ ps
@@ -76,13 +75,12 @@ genClassInfo (ClassI d i) = case d of
     extrFromTyp :: C 'TyVars -> C 'Ctxt -> Type
         -> (C 'Ctxt, C 'TyVars, [C 'Param])
     extrFromTyp ctv ccxt (ForallT ftv fcxt typ)
-      | ftv == ctv = case extrFromTyp ctv ccxt typ of
-          (a, b, p) -> (fcxt <> a,  b, p)
+      | ftv == ctv = extrFromTyp ctv ccxt typ
       | otherwise = case extrFromTyp ctv ccxt typ of
           (a, b, p) -> (fcxt <> a, ftv <> b, p)
     extrFromTyp ctv ccxt (AppT (AppT ArrowT p) t)
       = let (a,b,ps) = extrFromTyp ctv ccxt t in (a,b,p : ps)
-    extrFromTyp ctv _ccxt t = (mempty, ctv, [t])
+    extrFromTyp ctv ccxt t = (ccxt, ctv, [t])
 
 genClassInfo i = throwNonClassInfo i
 
@@ -140,8 +138,8 @@ genGADTDecs (ClassInfo (C ctxt) (C nm) (C tv) (C etv) (C _fd) fn (C _inst))
           let fCtxt = ctxt <> fCxt
               fi     = FuncInfo (G fCtxt) (G cName) (G ()) []
               rType' = appTypes (ConT gName) (map (VarT . tyVarName) (tv <> [etv]))
-              ftype  = appFuncTypes rType' ps
-              con    = ForallC ftv fCtxt $ GadtC [cName] [] ftype
+              ftype  = ForallT ftv fCtxt $ appFuncTypes rType' ps
+              con    = GadtC [cName] [] ftype
           pure (fi, con)
 
 varNameList :: [String]
@@ -176,7 +174,7 @@ genTErrClassInst
       (FuncInfo (G _gfcxt) (G gfnm) (G _gftv) (map getG -> _gfps))
         = do params <- traverse
                          (liftQ . newName)
-                         (zipWith const varNameList (initDef [] cfps))
+                         (zipWith const cfps varNameList)
              let pat = map VarP params
                  fexp = AppE (VarE 'toError)
                              (foldl' AppE (ConE gfnm) (map VarE params))
@@ -184,39 +182,6 @@ genTErrClassInst
                  clse = Clause pat body []
              pure $ FunD cfnm [clse]
 
-genGADTRewriteInst :: ClassInfo Class -> ClassInfo GADT -> REQ Dec
-genGADTRewriteInst
-  (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C _cetv) (C _cfd) cfns (C _cinst))
-  (ClassInfo (G _gcxt) (G  gnm) (G _gtv) (G _getv) (G _gfd) gfns (G _ginst))
-    = whileBuildingClassInst (mkName "RewriteError") $ do
-           funs <- (Map.mergeA
-                   (Map.traverseMissing $ \ k _ ->
-                       throwExtraFuncInfo k (someTypeRep $ typeRep @TypedError))
-                   (Map.traverseMissing $ \ k _ ->
-                       throwMissingFuncInfo k (someTypeRep $ typeRep @TypedError))
-                   (Map.zipWithAMatched $ \ _ a b -> genMemberClause a b)
-                   cfns gfns)
-           tyVar <- liftQ $ VarT <$> newName "e"
-           let func = FunD 'rewriteError (Map.elems funs)
-               cvars = map (VarT . tyVarName) ctv
-               param = appTypes (ConT cnm) cvars
-               gtyp  = appTypes (ConT gnm) cvars
-               icxt =  AppT param tyVar : ccxt
-               ityp = AppT (AppT (ConT ''RewriteError) tyVar) gtyp
-           pure $ InstanceD Nothing icxt ityp [func]
-  where
-
-    genMemberClause :: FuncInfo Class -> FuncInfo GADT -> REQ Clause
-    genMemberClause
-      (FuncInfo (C _cfcxt) (C cfnm) (C _cftv) (  cfps))
-      (FuncInfo (G _gfcxt) (G gfnm) (G _gftv) (map getG -> _gfps))
-        = do params <- traverse
-                         (liftQ . newName)
-                         (zipWith const varNameList (initDef [] cfps))
-             let pat = ConP gfnm $ map VarP params
-                 fexp = (foldl' AppE (VarE cfnm) (map VarE params))
-                 body = NormalB fexp
-             pure $ Clause [pat] body []
 {-
 genGADTRewriteInst :: (HasL '[Class,GADT] l) => ClassInfo' l -> REQ Dec
 genGADTRewriteInst = undefined
