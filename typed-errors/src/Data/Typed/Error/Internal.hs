@@ -27,6 +27,8 @@ type family ErrorList (l :: [* -> Constraint]) = (r :: TypeSet (* -> *)) where
 newtype TypedError (p :: [* -> Constraint]) where
   TypedError :: { getError :: VariantF (ErrorList p) (TypedError p) } -> TypedError p
 
+deriving instance (ForAllIn Show1 (ErrorList p)) => Show (TypedError p)
+
 -- | Extract or insert rules into Errors.
 class HasError (f :: * -> Constraint) (p :: [* -> Constraint]) where
 

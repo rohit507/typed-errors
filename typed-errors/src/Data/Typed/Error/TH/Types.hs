@@ -10,6 +10,7 @@ import Intro hiding (Type)
 import Language.Haskell.TH
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error
+import Data.Char
 import Type.Reflection
 import Data.Typed.Error.MonoidalErr
 import qualified Data.Map as Map
@@ -54,23 +55,30 @@ type FuncName = String
 type GADTConsName = String
 type PatternName = String
 
--- | What do we do when we cannot make a constructor out of a function. (C fcxt
-data GADTConsPolicy
-  = SkipSilently
-  | SkipWithWarning
-  | NoSkip
 
 data TypedErrorRules = TypedErrorRules {
     nameGADT :: ClassName -> Maybe (GADTName)
     -- | constructors without a matching name will not be produced.
   , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
-  , gadtConsPolicy :: GADTConsPolicy
   }
+
+defNameGADT :: ClassName -> Maybe GADTName
+defNameGADT (s : ls) = Just $ toUpper s : (ls <> "ET")
+defNameGADT [] = Nothing
+
+defNameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
+defNameGADTCons _ = defNameGADT
+
+defTER :: TypedErrorRules
+defTER = TypedErrorRules defNameGADT defNameGADTCons
 
 type REQErr = TypedError '[InternalErr, MonoidalErr]
 
 newtype REQ a where
   REQ :: (ExceptT REQErr (ReaderT TypedErrorRules Q)) a -> REQ a
+
+runREQ :: TypedErrorRules -> REQ a -> Q (Either REQErr a)
+runREQ ter (REQ m) = runReaderT (runExceptT m) ter
 
 liftQ :: Q a -> REQ a
 liftQ = REQ . lift . lift
@@ -80,7 +88,9 @@ deriving newtype instance Applicative REQ
 deriving newtype instance Monad REQ
 deriving newtype instance Alternative REQ
 deriving newtype instance MonadPlus REQ
+deriving newtype instance MonadIO REQ
 deriving newtype instance MonadError REQErr REQ
+deriving newtype instance MonadReader TypedErrorRules REQ
 
 data Context
   = ClName
@@ -174,15 +184,15 @@ data Class a where
 deriving instance (Eq (C a)) => Eq (Class a)
 
 type family G (a :: Context) :: * where
-  G 'Ctxt     = ()
-  G 'ClName   = ()
-  G 'FnName   = ()
+  G 'Ctxt     = Cxt
+  G 'ClName   = Name
+  G 'FnName   = Name
   G 'TyVars   = ()
-  G 'ErrTyVar = ()
+  G 'ErrTyVar = Type
   G 'FunDeps  = ()
   G 'InstDecs = ()
   G 'Knd      = ()
-  G 'Param    = ()
+  G 'Param    = Type
 
 data GADT a where
   G :: { getG :: G a }-> GADT a

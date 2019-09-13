@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE DeriveAnyClass  #-}
 
 module Data.Typed.Error.TH.InternalErr where
 
@@ -115,23 +116,78 @@ instance (Ord Info, Ord Dec, Ord Name, Ord Type, Ord e) => Ord (InternalErrT e) 
 --
 -- canonical instances for deriving these are in the deriving-compat package
 --
--- instance (Show Info, Show Dec, Show Name, Show Type) => Show1 InternalErrT where
---  liftShowsPrec sPrec sList p (NonClassInfoT         a  )
---    = showParen (d > app_prec) $ showString "NonClassInfo " . showsPrec (app_prec + 1) a
---      where
---        app_prec = 10
+instance (Show Info, Show Dec, Show Name, Show Type) => Show1 InternalErrT where
+  liftShowsPrec sPrec sList p (NonClassInfoT         a  )
+   = showParen (p > app_prec) $ showString "NonClassInfo " . showsPrec (app_prec + 1) a
+     where
+       app_prec = 10
 
---  liftShowsPrec sPrec sList p (NonClassDecT          a  )
---  liftShowsPrec sPrec sList p (MissingErrorTyVarT       )
---  liftShowsPrec sPrec sList p (InvalidFundepT        a b)
---  liftShowsPrec sPrec sList p (NotFunctionSigT       a  )
---  liftShowsPrec sPrec sList p (InvalidFuncTypeT      a  )
---  liftShowsPrec sPrec sList p (InvalidFinalParamT    a b)
---  liftShowsPrec sPrec sList p (FunctionWithNoParamsT    )
---  liftShowsPrec sPrec sList p (WithinClassT          a b)
---  liftShowsPrec sPrec sList p (WithinFunctionT
+  liftShowsPrec sPrec sList p (NonClassDecT          a  )
+   = showParen (p > app_prec) $ showString "NonClassDec " . showsPrec (app_prec + 1) a
+     where
+       app_prec = 10
 
+  liftShowsPrec sPrec sList p (MissingErrorTyVarT       )
+   = showParen (p > app_prec) $ showString "MissErrTyVar"
+     where
+       app_prec = 10
 
+  liftShowsPrec sPrec sList p (InvalidFundepT        a b)
+   = showParen (p > app_prec) $ showString "InvalFunDep "
+       . showsPrec (app_prec + 1) a
+       . showsPrec (app_prec + 1) b
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (NotFunctionSigT       a  )
+   = showParen (p > app_prec) $ showString "NotFunc " . showsPrec (app_prec + 1) a
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (InvalidFuncTypeT      a  )
+   = showParen (p > app_prec) $ showString "InvalFType " . showsPrec (app_prec + 1) a
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (InvalidFinalParamT    a b)
+   = showParen (p > app_prec) $ showString "InvaFinPar "
+       . showsPrec (app_prec + 1) a
+       . showsPrec (app_prec + 1) b
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (FunctionWithNoParamsT    )
+   = showParen (p > app_prec) $ showString "Fw/noparams"
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (WithinClassT          a b)
+   = showParen (p > app_prec) $ showString "withinClass"
+       . showsPrec (app_prec + 1) a
+       . sPrec (app_prec + 1) b
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (WithinFunctionT a b)
+   = showParen (p > app_prec) $ showString "WithinFunc "
+       . showsPrec (app_prec + 1) a
+       . sPrec (app_prec + 1) b
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (MissingFuncInfoT a b)
+   = showParen (p > app_prec) $ showString "WithinFunc "
+       . showsPrec (app_prec + 1) a
+       . showsPrec (app_prec + 1) b
+     where
+       app_prec = 10
+
+  liftShowsPrec sPrec sList p (ExtraFuncInfoT a b)
+   = showParen (p > app_prec) $ showString "WithinFunc "
+       . showsPrec (app_prec + 1) a
+       . showsPrec (app_prec + 1) b
+     where
+       app_prec = 10
 
 instance Functor InternalErrT where
  fmap _ (NonClassInfoT         a  ) = NonClassInfoT         a
@@ -462,19 +518,19 @@ whileWithinFunction a m = catchError m (throwError . withinFunction a)
 throwInvalidClassDec :: ( InternalErr e
         , MonadError e m
         ) => Dec -> m a
-throwInvalidClassDec a = undefined -- throwError $ extraFuncInfo a b
+throwInvalidClassDec a = error . show $ ppr a  -- undefined -- throwError $ extraFuncInfo a b
 
 throwInvalidClassNameForGADT :: ( InternalErr e
         , MonadError e m
         ) => Name -> m a
-throwInvalidClassNameForGADT a = undefined -- throwError $ extraFuncInfo a b
+throwInvalidClassNameForGADT a = error . show $ ppr a-- throwError $ extraFuncInfo a b
 
 throwInvalidFuncNameForGADT :: ( InternalErr e
         , MonadError e m
         ) => Name -> Name -> m a
-throwInvalidFuncNameForGADT a = undefined -- throwError $ extraFuncInfo a b
+throwInvalidFuncNameForGADT a b = error . show $ (ppr a, ppr b)  -- throwError $ extraFuncInfo a b
 
 whileBuildingGADT :: ( InternalErr e
                       , MonadError e m
                       ) => Name -> m a -> m a
-whileBuildingGADT a m = undefined -- catchError m (throwError . withinFunction a)
+whileBuildingGADT a m = m  -- catchError m (throwError . withinFunction a)
