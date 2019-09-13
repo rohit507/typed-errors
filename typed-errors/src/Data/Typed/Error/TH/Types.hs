@@ -9,10 +9,10 @@ module Data.Typed.Error.TH.Types where
 import Intro hiding (Type)
 import Language.Haskell.TH
 import Data.Typed.Error.TH.InternalErr
+import Data.Typed.Error.MonoidalErr
 import Data.Typed.Error
 import Data.Char
 import Type.Reflection
-import Data.Typed.Error.MonoidalErr
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Lazy as Map
 
@@ -72,7 +72,7 @@ defNameGADTCons _ = defNameGADT
 defTER :: TypedErrorRules
 defTER = TypedErrorRules defNameGADT defNameGADTCons
 
-type REQErr = TypedError '[InternalErr, MonoidalErr]
+type REQErr = TypedError '[InternalErr,MonoidalErr]
 
 newtype REQ a where
   REQ :: (ExceptT REQErr (ReaderT TypedErrorRules Q)) a -> REQ a

@@ -29,7 +29,7 @@ testAnn n = do
       reportError $ show e
       pure []
     Right ds -> do
-      reportError . show . ppr_list $ ds
+      -- reportError . show . ppr_list $ ds
       pure ds
 
 genClassInfo :: Info -> REQ (ClassInfo Class)
@@ -58,27 +58,27 @@ genClassInfo (ClassI d i) = case d of
       -> REQ (Name, FuncInfo Class)
     genFuncInfo t c (SigD nm typ)
       = let (a,b,ps) = extrFromTyp t c typ in  do
-          liftQ . reportError . show . ppr $ typ
-          liftQ . reportError . show $ a
-          liftQ . reportError . show $ b
-          liftQ . reportError . show . ppr $ ps
+          -- liftQ . reportError . show . ppr $ typ
+          -- liftQ . reportError . show $ a
+          -- liftQ . reportError . show $ b
+          -- liftQ . reportError . show . ppr $ ps
           pure . (nm,) $
             FuncInfo
-              (C $ fromMaybe [] a)
+              (C a)
               (C nm)
-              (C $ fromMaybe mempty b)
+              (C b)
               (map C ps :: [Class 'Param])
     genFuncInfo _ _ n = throwInvalidClassDec n
 
     extrFromTyp :: C 'TyVars -> C 'Ctxt -> Type
-        -> (Maybe (C 'Ctxt), Maybe (C 'TyVars), [C 'Param])
+        -> (C 'Ctxt, C 'TyVars, [C 'Param])
     extrFromTyp ctv ccxt (ForallT ftv fcxt typ)
-      | ftv == ctv && ccxt == fcxt = case extrFromTyp ctv ccxt typ of
-          (a, b, p) -> TODO FIXME
-      | otherwise = extrFromTyp ftv fcxt typ
+      | ftv == ctv = extrFromTyp ctv ccxt typ
+      | otherwise = case extrFromTyp ctv ccxt typ of
+          (a, b, p) -> (fcxt <> a, ftv <> b, p)
     extrFromTyp ctv ccxt (AppT (AppT ArrowT p) t)
       = let (a,b,ps) = extrFromTyp ctv ccxt t in (a,b,p : ps)
-    extrFromTyp _ _ t = (Nothing, Nothing, [t])
+    extrFromTyp ctv ccxt t = (ccxt, ctv, [t])
 
 genClassInfo i = throwNonClassInfo i
 
