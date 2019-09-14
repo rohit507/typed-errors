@@ -27,9 +27,12 @@ type GADTConsName = String
 type PatternName = String
 
 data TypedErrorRules = TypedErrorRules {
-    nameGADT :: ClassName -> Maybe (GADTName)
+    nameGADT :: ClassName -> Maybe GADTName
     -- | constructors without a matching name will not be produced.
   , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
+  , nameGetClass :: ClassName -> Maybe ClassName
+  , nameGetLift :: ClassName -> Maybe FuncName
+  , nameGetFunc :: ClassName -> FuncName -> Maybe FuncName
   , dryRun :: Bool
   }
 
@@ -37,6 +40,9 @@ defTER :: TypedErrorRules
 defTER = TypedErrorRules {
     nameGADT = defNameGADT
   , nameGADTCons = defNameGADTCons
+  , nameGetClass = defNameGetClass
+  , nameGetLift  = defNameGetLift
+  , nameGetFunc  = defNameGetFunc
   , dryRun = True
   }
 
@@ -47,6 +53,16 @@ defNameGADT [] = Nothing
 defNameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
 defNameGADTCons _ = defNameGADT
 
+defNameGetClass :: ClassName -> Maybe ClassName
+defNameGetClass n = ("Get" <>) <$> defNameGADT n
+
+defNameGetLift :: ClassName -> Maybe FuncName
+defNameGetLift (s : ls) = Just $ "lift" <> (toUpper s : ls)
+defNameGetLift [] = Nothing
+
+defNameGetFunc :: ClassName -> FuncName -> Maybe FuncName
+defNameGetFunc _ (s : ls) = Just $ "from" <> (toUpper s : ls)
+defNameGetFunc _ [] = Nothing
 
 type REQErr = TypedError '[InternalErr,MonoidalErr]
 
@@ -130,15 +146,15 @@ data GADT a where
 deriving instance (Eq (G a)) => Eq (GADT a)
 
 type family GC (a :: Context) :: * where
-  GC 'Ctxt     = ()
-  GC 'ClName   = ()
-  GC 'FnName   = ()
-  GC 'TyVars   = ()
-  GC 'ErrTyVar = ()
+  GC 'Ctxt     = Cxt
+  GC 'ClName   = Name
+  GC 'FnName   = Name
+  GC 'TyVars   = [Type]
+  GC 'ErrTyVar = (Name, Name)
   GC 'FunDeps  = ()
-  GC 'InstDecs = ()
+  GC 'InstDecs = Name
   GC 'Knd      = ()
-  GC 'Param    = ()
+  GC 'Param    = Type
 
 data GetClass a where
   GC :: { getGC :: GC a }-> GetClass a

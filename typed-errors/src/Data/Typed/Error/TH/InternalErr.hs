@@ -523,7 +523,17 @@ throwInvalidClassDec a = error . show $ ppr a  -- undefined -- throwError $ extr
 throwInvalidClassNameForGADT :: ( InternalErr e
         , MonadError e m
         ) => Name -> m a
-throwInvalidClassNameForGADT a = error . show $ ppr a-- throwError $ extraFuncInfo a b
+throwInvalidClassNameForGADT a = error . show $ ppr a -- throwError $ extraFuncInfo a b
+
+throwInvalidClassNameForGetClass :: ( InternalErr e
+        , MonadError e m
+        ) => Name -> m a
+throwInvalidClassNameForGetClass a = error . show $ ppr a -- throwError $ extraFuncInfo a b
+
+throwInvalidFuncNameForGetClass :: ( InternalErr e
+        , MonadError e m
+        ) => Name -> Name -> m a
+throwInvalidFuncNameForGetClass a b = error . show $ (ppr a, ppr b)-- throwError $ extraFuncInfo a b
 
 throwInvalidFuncNameForGADT :: ( InternalErr e
         , MonadError e m
