@@ -47,6 +47,8 @@ defTER = TypedErrorRules {
   , nameGetFunc  = defNameGetFunc
   , nameClassPattern = defNameClassPattern
   , nameFuncPattern = defNameFuncPattern
+  , nameThrow = defNameThrow
+  , nameWhile = defNamwWhile
   , dryRun = True
   }
 
@@ -73,6 +75,14 @@ defNameGetLift [] = Nothing
 defNameGetFunc :: ClassName -> Maybe FuncName
 defNameGetFunc (s : ls) = Just $ "from" <> (toUpper s : ls)
 defNameGetFunc [] = Nothing
+
+defNameThrow :: ClassName -> Maybe FuncName
+defNameThrow (s : ls) = Just $ "throw" <> (toUpper s : ls)
+defNameThrow [] = Nothing
+
+defNameWhile :: ClassName -> Maybe FuncName
+defNameWhile (s : ls) = Just $ "while" <> (toUpper s : ls)
+defNameWhile [] = Nothing
 
 type REQErr = TypedError '[InternalErr,MonoidalErr]
 

@@ -28,7 +28,8 @@ testAnn n = do
     grids   <- genGADTRewriteInst ci gi
     (gci, gcds) <- genGetClass ci gi
     ggids <- genGADTGetInst ci gi gci
-    pure $ gds <> [teids,grids,gcds,ggids]
+    patds <- genErrPatterns ci gi gci
+    pure $ gds <> [teids,grids,gcds,ggids] <> patds
   case res of
     Left e -> do
       reportError $ show e
@@ -245,10 +246,7 @@ genGetClass
            ftv <- liftQ $ newName "f"
            let cns = [AppT cType (VarT ftv)] --, AppT cType (VarT atv)]
            (leName, leDec) <- genLiftErrDec (VarT ftv) (VarT atv)
-           funs <- traverse (genMemberSig cns (VarT ftv) (VarT atv)) cfns
-           let fis = map fst funs
-               fnDecs = map snd $ Map.elems funs
-
+           let
                tvs = map PlainTV [ftv, atv]
                fd  = FunDep [ftv] [atv]
                mType = AppT (ConT ''Maybe)
@@ -277,28 +275,7 @@ genGetClass
         Just a -> pure $ mkName a
       pure . (fName,) $ SigD fName (AppT (AppT ArrowT ftv) atv)
 
-    -- FIXME :: Clean this up so that you can use it w/o being awful
-    genMemberSig :: [Type] -> Type -> Type
-      -> FuncInfo Class -> REQ (FuncInfo GetClass, Dec)
-    genMemberSig cns ftv _atv
-      (FuncInfo (C cfcxt) (C cfnm) (C cftv) (map getC -> cfps))
-        =  do fName <- (\ f -> (nameGetFunc f) (nameBase cnm))
-                <$> ask >>= \case
-                  Nothing -> do
-                    throwInvalidClassNameForGetClass cnm
-                  Just a -> pure $ mkName a
-              whileWithinFunction fName $
-                 let cfps' = initDef [] cfps
-                     cxt' = ccxt <> cfcxt
-                     cxt'' = genParamTupleTyp $ cxt'
-                     dTyp = AppT (ConT ''Dict) cxt''
-                     pTyp = genParamTupleTyp cfps'
-                     -- mType = AppT (ConT ''Maybe) (AppT (AppT (TupleT 2) dTyp) pTyp)
-                     mType = AppT (ConT ''Maybe) (appTypes (ConT gnm) cns)
-                     tpType = AppT (AppT ArrowT ftv) mType
-                     fnType = ForallT [] cns tpType
-                     fi = FuncInfo (GC ccxt) (GC fName) (GC []) (map GC cfps')
-                  in pure (fi, SigD fName tpType)
+
 
 genGADTGetInst :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass -> REQ Dec
 genGADTGetInst
@@ -342,11 +319,141 @@ genTypErrGetInst
 genErrPatterns :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass
   -> REQ [Dec]
 genErrPatterns
-  (ClassInfo (C  _ccxt)  (C  ccnm) (C  cctv) (C ccetv) (C ccfd) ccfns (C ccinst))
-  (ClassInfo (G  _gcxt) (G   gnm) (G  _gtv) (G  _getv) (G  _gfd) gfns (G  ginst))
-  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC fname) cfns (GC cinst))
-    = undefined
+  (ClassInfo (C  ccxt)  (C  cnm) (C  ctv) (C cetv) (C cfd) ccfns (C ccinst))
+  (ClassInfo (G  _gcxt) (G   gnm) (G  gtv) (G  getv) (G  gfd) gfns (G  ginst))
+  (ClassInfo (GC _gccxt) (GC  gcnm) (GC  gctv) (GC (ftv,atv)) (GC gcfname) gcfns (GC leName))
+    = do cpds <- genClassPattern
+         fnds <- for (Map.keys ccfns) $ \ n ->
+           case (,) <$> Map.lookup n ccfns <*> Map.lookup n gfns of
+             Nothing -> panic "error"
+             Just (cf, gf) -> genFuncPattern cf gf
+         pure $ cpds <> (mconcat fnds)
 
+  where
+
+    genClassPattern :: REQ [Dec]
+    genClassPattern = do
+      pName <- ((\ f -> f $ nameBase cnm) . nameClassPattern <$> ask) >>= \case
+        Nothing -> throwInvalidClassNameForGetClass cnm
+        Just a  -> pure $ mkName a
+      pVar <- liftQ $ newName "p"
+      xVar <- liftQ $ newName "x"
+      let leType = AppT (ConT ''TypedError) (VarT pVar)
+          ctvType =  (map (VarT . tyVarName) ctv)
+          clsCns = appTypes (ConT cnm) ctvType
+          gCns = appTypes (ConT gnm) ctvType
+          hasErr = AppT (AppT (ConT ''HasError) clsCns) (VarT pVar)
+          iTyp = appTypes (ConT cnm) (ctvType <> [leType, VarT atv])
+          synDirClause = Clause [VarP xVar]
+            (NormalB $ AppE (VarE 'toError) (VarE xVar)) []
+          synDir = ExplBidir [synDirClause]
+          synArgs = PrefixPatSyn [xVar]
+          patPat = ViewP (AppTypeE (VarE 'fromError) clsCns)
+                         (ConP 'Just [VarP xVar])
+          patSynTyp = ForallT (ctv <> [PlainTV pVar]) (hasErr : ccxt) $ ForallT [] ccxt $
+            AppT (AppT ArrowT (AppT gCns leType)) leType
+      pure [ PatSynSigD pName patSynTyp
+           , PatSynD pName synArgs synDir patPat]
+
+
+    genFuncPattern :: FuncInfo Class -> FuncInfo GADT -> REQ [Dec]
+    genFuncPattern
+      (FuncInfo (C  cfcxt) (C cfnm) (C  cftv) (map getC ->  cfps))
+      (FuncInfo (G _gfcxt) (G gfnm) (G _gftv) (map getG -> _gfps))
+        = do
+          fName <- ((\ f -> f (nameBase cnm) $ nameBase cfnm) . nameFuncPattern <$> ask) >>= \case
+             Nothing -> throwInvalidClassNameForGetClass cnm
+             Just a  -> pure $ mkName a
+          params <- traverse
+             (liftQ . newName)
+             (zipWith const varNameList (initDef [] cfps))
+          let utv = ctv <> [PlainTV ftv,PlainTV atv]
+              ctvType =  (map (VarT . tyVarName) ctv)
+              ftyp = VarT ftv
+              atyp = VarT atv
+              clsCns  = appTypes (ConT cnm) ctvType
+              gclsCns = appTypes (ConT gcnm) ctvType
+              isMember = any (== atyp) cfps
+              -- extraCnst True = [AppT (AppT EqualityT ftyp) atyp]
+              -- extraCnst False = []
+              ucxt = [ AppT clsCns ftyp
+                     --, AppT clsCns atyp
+                     , AppT (AppT gclsCns ftyp) atyp]
+              etv = cftv
+              ecxt = ccxt <> cfcxt
+              appF (l : []) = l
+              appF (l : ls) = AppT (AppT ArrowT l) (appF ls)
+              appF _ = panic "unepected empty list"
+              -- uptype :: Type -> Type
+              -- uptype a
+              --   | a == atyp = atyp
+              --   | otherwise = a
+              -- mcfps = map uptype $ initDef [] cfps
+              mcfps = initDef [] cfps
+              ptyp = appF (mcfps <> [ftyp])
+              patTyp = ForallT utv ucxt $ ForallT etv ecxt $ ptyp
+
+              -- paramExpr :: Type -> Name -> Exp
+              -- paramExpr a b
+              --   | a == atyp = AppE (foldl' AppTypeE (VarE leName) ctvType) (VarE b)
+              --   | otherwise = VarE (b :: Name)
+              -- synDirBody = foldl' AppE (VarE cfnm) (zipWith paramExpr cfps params)
+              -- synDirBody =  AppE (foldl' AppTypeE (VarE leName) ctvType) $
+              --    (AppTypeE (foldl' AppE (VarE cfnm) (map VarE params)) atyp)
+              -- synDirBody = AppE (VarE 'rewriteError) $
+              --  foldl' AppE (VarE cfnm) (map VarE params)
+              synDirBody =  foldl' AppE (VarE cfnm) (map VarE params)
+              synDirClause = Clause (map VarP params) (NormalB synDirBody) []
+              synDir = ExplBidir [synDirClause]
+              patSynArgs = PrefixPatSyn params
+              patPat = ViewP (foldl' AppTypeE (VarE gcfname)
+                                              (ctvType <> [ftyp,atyp]))
+                             (ConP 'Just [ConP gfnm (map VarP params)])
+          pure [PatSynSigD fName patTyp
+               ,PatSynD fName patSynArgs Unidir patPat]
+
+
+genThrowFuncs :: ClassInfo Class -> REQ Dec
+genThrowFuncs
+  (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C  cetv) (C _cfd) cfns (C _cinst))
+    = whileBuildingClassInst (mkName "TypedError p") $ do
+           funs <- (Map.mergeA
+              (Map.traverseMissing $ \ k _ ->
+                  throwExtraFuncInfo k (someTypeRep $ typeRep @TypedError))
+              (Map.traverseMissing $ \ k _ ->
+                  throwMissingFuncInfo k (someTypeRep $ typeRep @TypedError))
+              (Map.zipWithAMatched $ \ _ a b -> genMemberFunc a b)
+              cfns gfns)
+           tyVar <- liftQ $ VarT <$> newName "p"
+           let classT = (ConT cnm)
+               instT = appTypes classT $ map (VarT . tyVarName) ctv
+               icxt = (AppT (AppT (ConT ''HasError) instT) tyVar) : ccxt
+               typ = AppT instT (AppT (ConT ''TypedError) tyVar)
+           pure $ InstanceD Nothing icxt typ (Map.elems funs)
+  where
+
+    genThrowFunc :: FuncInfo Class -> FuncInfo GADT -> REQ [Dec]
+    genThrowFunc
+      (FuncInfo (C _cfcxt) (C cfnm) (C _cftv) (  cfps))
+      (FuncInfo (G _gfcxt) (G gfnm) (G _gftv) (map getG -> _gfps))
+        = do
+          fName <- ((\ f -> f $ nameBase cnm) . nameThrow <$> ask) >>= \case
+            Nothing -> throwInvalidClassNameForGetClass cnm
+            Just a  -> pure $ mkName a
+          pVar <- liftQ $ newName "p"
+          xVar <- liftQ $ newName "x"
+
+
+
+      params <- traverse
+                         (liftQ . newName)
+                         (zipWith const varNameList (initDef [] cfps))
+             let pat = map VarP params
+                 fexp = AppE (VarE 'toError)
+                             (foldl' AppE (ConE gfnm) (map VarE params))
+                 body = NormalB fexp
+                 clse = Clause pat body []
+             pure $ FunD cfnm [clse]
       -- Pattern for the general Type ...
       -- patterns for the nduvidual constructors.
 
