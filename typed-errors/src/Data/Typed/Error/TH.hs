@@ -29,7 +29,9 @@ testAnn n = do
     (gci, gcds) <- genGetClass ci gi
     ggids <- genGADTGetInst ci gi gci
     patds <- genErrPatterns ci gi gci
-    pure $ gds <> [teids,grids,gcds,ggids] <> patds
+    tfds  <- genThrowFuncs ci
+    wfds  <- genWhileFuncs ci
+    pure $ gds <> [teids,grids,gcds,ggids] <> patds <> tdfs <> wfds
   case res of
     Left e -> do
       reportError $ show e
@@ -413,67 +415,43 @@ genErrPatterns
                ,PatSynD fName patSynArgs Unidir patPat]
 
 
-genThrowFuncs :: ClassInfo Class -> REQ Dec
+genThrowFuncs :: ClassInfo Class -> REQ [Dec]
 genThrowFuncs
   (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C  cetv) (C _cfd) cfns (C _cinst))
-    = whileBuildingClassInst (mkName "TypedError p") $ do
-           funs <- (Map.mergeA
-              (Map.traverseMissing $ \ k _ ->
-                  throwExtraFuncInfo k (someTypeRep $ typeRep @TypedError))
-              (Map.traverseMissing $ \ k _ ->
-                  throwMissingFuncInfo k (someTypeRep $ typeRep @TypedError))
-              (Map.zipWithAMatched $ \ _ a b -> genMemberFunc a b)
-              cfns gfns)
-           tyVar <- liftQ $ VarT <$> newName "p"
-           let classT = (ConT cnm)
-               instT = appTypes classT $ map (VarT . tyVarName) ctv
-               icxt = (AppT (AppT (ConT ''HasError) instT) tyVar) : ccxt
-               typ = AppT instT (AppT (ConT ''TypedError) tyVar)
-           pure $ InstanceD Nothing icxt typ (Map.elems funs)
+    = whileBuildingClassInst (mkName "ThrowFuncs") $ do
+        mconcat <$> traverse genThrowFuncs (Map.elems cfns)
+
   where
 
-    genThrowFunc :: FuncInfo Class -> FuncInfo GADT -> REQ [Dec]
+    genThrowFunc :: FuncInfo Class -> REQ [Dec]
     genThrowFunc
       (FuncInfo (C _cfcxt) (C cfnm) (C _cftv) (  cfps))
-      (FuncInfo (G _gfcxt) (G gfnm) (G _gftv) (map getG -> _gfps))
         = do
           fName <- ((\ f -> f $ nameBase cnm) . nameThrow <$> ask) >>= \case
             Nothing -> throwInvalidClassNameForGetClass cnm
             Just a  -> pure $ mkName a
           pVar <- liftQ $ newName "p"
           xVar <- liftQ $ newName "x"
+          -- getLast elem, check if e
+          -- generate the throw func
 
+genWhileFuncs :: ClassInfo Class -> REQ [Dec]
+genWhileFuncs
+  (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C  cetv) (C _cfd) cfns (C _cinst))
+    = whileBuildingClassInst (mkName "ThrowFuncs") $ do
+        mconcat <$> traverse genWhileFunc (Map.elems cfns)
 
+  where
 
-      params <- traverse
-                         (liftQ . newName)
-                         (zipWith const varNameList (initDef [] cfps))
-             let pat = map VarP params
-                 fexp = AppE (VarE 'toError)
-                             (foldl' AppE (ConE gfnm) (map VarE params))
-                 body = NormalB fexp
-                 clse = Clause pat body []
-             pure $ FunD cfnm [clse]
-      -- Pattern for the general Type ...
-      -- patterns for the nduvidual constructors.
-
--- repType :: forall d. (Eq d , Data d) => d -> d -> (forall b. Data b => b -> b)
--- repType a b = \ c -> case testEquality (typeOf a) (typeOf c) of
---                        Just Refl -> if c == a then b else c
---                        Nothing -> c
-
--- repTypeMap :: forall d. (Ord d , Data d) => Map d d -> (forall b. Data b => b -> b)
--- repTypeMap m = \ c -> case testEquality (typeRep @d) (typeOf c) of
---                        Just Refl -> fromMaybe c (Map.lookup c m)
-                       -- Nothing -> c
-
-{-
-
-genErrPatterns :: (HasL '[GADT,GetClass] l)
-  => ClassInfo' l -> REQ (ClassInfo' (Pattern ': l), [Dec])
-genErrPatterns = undefined
-
-genThrowFuncs ::  (HasL '[Class] l) => ClassInfo' l -> REQ [Dec]
-genThrowFuncs = undefined
-
--}
+    genWhileFunc :: FuncInfo Class -> REQ [Dec]
+    genWhileFunc
+      (FuncInfo (C _cfcxt) (C cfnm) (C _cftv) (  cfps))
+        = do
+          fName <- ((\ f -> f $ nameBase cnm) . nameThrow <$> ask) >>= \case
+            Nothing -> throwInvalidClassNameForGetClass cnm
+            Just a  -> pure $ mkName a
+          pVar <- liftQ $ newName "p"
+          xVar <- liftQ $ newName "x"
+          -- get last two elems
+          -- check if they are both e
+          -- generate the while func
