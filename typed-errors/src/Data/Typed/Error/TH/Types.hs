@@ -32,7 +32,9 @@ data TypedErrorRules = TypedErrorRules {
   , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
   , nameGetClass :: ClassName -> Maybe ClassName
   , nameGetLift :: ClassName -> Maybe FuncName
-  , nameGetFunc :: ClassName -> FuncName -> Maybe FuncName
+  , nameGetFunc :: ClassName -> Maybe FuncName
+  , nameClassPattern :: ClassName -> Maybe PatternName
+  , nameFuncPattern :: ClassName -> FuncName -> Maybe PatternName
   , dryRun :: Bool
   }
 
@@ -43,9 +45,17 @@ defTER = TypedErrorRules {
   , nameGetClass = defNameGetClass
   , nameGetLift  = defNameGetLift
   , nameGetFunc  = defNameGetFunc
+  , nameClassPattern = defNameClassPattern
+  , nameFuncPattern = defNameFuncPattern
   , dryRun = True
   }
 
+defNameClassPattern :: ClassName -> Maybe PatternName
+defNameClassPattern (s : ls) = Just $ toUpper s : ls
+defNameClassPattern [] = Nothing
+
+defNameFuncPattern :: ClassName -> FuncName -> Maybe PatternName
+defNameFuncPattern _ = defNameClassPattern
 defNameGADT :: ClassName -> Maybe GADTName
 defNameGADT (s : ls) = Just $ toUpper s : (ls <> "ET")
 defNameGADT [] = Nothing
@@ -60,9 +70,9 @@ defNameGetLift :: ClassName -> Maybe FuncName
 defNameGetLift (s : ls) = Just $ "lift" <> (toUpper s : ls)
 defNameGetLift [] = Nothing
 
-defNameGetFunc :: ClassName -> FuncName -> Maybe FuncName
-defNameGetFunc _ (s : ls) = Just $ "from" <> (toUpper s : ls)
-defNameGetFunc _ [] = Nothing
+defNameGetFunc :: ClassName -> Maybe FuncName
+defNameGetFunc (s : ls) = Just $ "from" <> (toUpper s : ls)
+defNameGetFunc [] = Nothing
 
 type REQErr = TypedError '[InternalErr,MonoidalErr]
 
@@ -151,7 +161,7 @@ type family GC (a :: Context) :: * where
   GC 'FnName   = Name
   GC 'TyVars   = [Type]
   GC 'ErrTyVar = (Name, Name)
-  GC 'FunDeps  = ()
+  GC 'FunDeps  = Name
   GC 'InstDecs = Name
   GC 'Knd      = ()
   GC 'Param    = Type

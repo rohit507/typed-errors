@@ -234,6 +234,10 @@ genGetClass
              Nothing -> do
                throwInvalidClassNameForGetClass cnm
              Just a  -> pure $ mkName a
+         fName :: Name <- ((\ f -> f $ nameBase cnm) . nameGetFunc <$> ask) >>= \case
+             Nothing -> do
+               throwInvalidClassNameForGetClass cnm
+             Just a  -> pure $ mkName a
          do
            let params = map (VarT . tyVarName) ctv
                cType = appTypes (ConT cnm) params
@@ -244,17 +248,23 @@ genGetClass
            funs <- traverse (genMemberSig cns (VarT ftv) (VarT atv)) cfns
            let fis = map fst funs
                fnDecs = map snd $ Map.elems funs
+
+               tvs = map PlainTV [ftv, atv]
+               fd  = FunDep [ftv] [atv]
+               mType = AppT (ConT ''Maybe)
+                            (appTypes (ConT gnm) (params <> [VarT atv]))
+               tpType = AppT (AppT ArrowT (VarT ftv)) mType
+               fnType = ForallT [] cns tpType
+               fnDec = SigD fName fnType
                ci = ClassInfo
                     (GC cns)
                     (GC cName)
                     (GC $ map (VarT . tyVarName) ctv)
                     (GC (ftv,atv))
-                    (GC ())
-                    fis
+                    (GC fName)
+                    []
                     (GC leName)
-               tvs = map PlainTV [ftv, atv]
-               fd  = FunDep [ftv] [atv]
-               dec = ClassD mempty cName (ctv <> tvs) [fd] (leDec:fnDecs)
+               dec = ClassD mempty cName (ctv <> tvs) [fd] [leDec,fnDec]
            pure (ci, dec)
 
   where
@@ -267,11 +277,12 @@ genGetClass
         Just a -> pure $ mkName a
       pure . (fName,) $ SigD fName (AppT (AppT ArrowT ftv) atv)
 
+    -- FIXME :: Clean this up so that you can use it w/o being awful
     genMemberSig :: [Type] -> Type -> Type
       -> FuncInfo Class -> REQ (FuncInfo GetClass, Dec)
     genMemberSig cns ftv _atv
       (FuncInfo (C cfcxt) (C cfnm) (C cftv) (map getC -> cfps))
-        =  do fName <- (\ f -> (nameGetFunc f) (nameBase cnm) (nameBase cfnm))
+        =  do fName <- (\ f -> (nameGetFunc f) (nameBase cnm))
                 <$> ask >>= \case
                   Nothing -> do
                     throwInvalidClassNameForGetClass cnm
@@ -293,16 +304,11 @@ genGADTGetInst :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass -> REQ
 genGADTGetInst
   (ClassInfo (C  _ccxt)  (C  ccnm) (C  cctv) (C ccetv) (C ccfd) ccfns (C ccinst))
   (ClassInfo (G  _gcxt) (G   gnm) (G  _gtv) (G  _getv) (G  _gfd) gfns (G  ginst))
-  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC _cfd) cfns (GC cinst))
+  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC fname) cfns (GC cinst))
     = whileBuildingClassInst (mkName "Get GADT") $ do
-       funs <- (Map.mergeA
-               (Map.traverseMissing $ \ k _ ->
-                   throwExtraFuncInfo k (someTypeRep $ typeRep @TypedError))
-               (Map.traverseMissing $ \ k _ ->
-                   throwMissingFuncInfo k (someTypeRep $ typeRep @TypedError))
-               (Map.zipWithAMatched $ \ _ a b -> genMemberClause a b)
-               gfns cfns)
-       let decs = genLiftErrLift : Map.elems funs
+       let fbod = NormalB $ ConE 'Just
+           impl = FunD fname [Clause [] fbod []]
+           decs = [genLiftErrLift, impl]
            ftv' = appTypes (ConT gnm) (ctv <> [VarT atv])
            iTyp = appTypes (ConT cnm) (ctv <> [ftv', VarT atv])
            cons = map (\ n -> appTypes (ConT ccnm) (ctv <> [n])) [ftv', VarT atv]
@@ -313,18 +319,37 @@ genGADTGetInst
     genLiftErrLift :: Dec
     genLiftErrLift = FunD cinst [Clause [] (NormalB $ VarE 'rewriteError) []]
 
+genTypErrGetInst :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass -> REQ Dec
+genTypErrGetInst
+  (ClassInfo (C  _ccxt)  (C  ccnm) (C  cctv) (C ccetv) (C ccfd) ccfns (C ccinst))
+  (ClassInfo (G  _gcxt) (G   gnm) (G  _gtv) (G  _getv) (G  _gfd) gfns (G  ginst))
+  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC fname) cfns (GC cinst))
+    = whileBuildingClassInst (mkName "Get GADT") $ do
+       pVar <- liftQ $ newName "p"
+       let leType = AppT (ConT 'TypedError) (VarT pVar)
+           impl = FunD fname [Clause [] fbod []]
+           decs = [genLiftErrLift, impl]
+           fbod = NormalB $ AppTypeE (VarE 'fromError) (appTypes (ConT ccnm) ctv)
+           iTyp = appTypes (ConT cnm) (ctv <> [leType, VarT atv])
+           cons = map (\ n -> appTypes (ConT ccnm) (ctv <> [n])) [leType, VarT atv]
+       pure $ InstanceD Nothing cons iTyp decs
 
-    genMemberClause :: FuncInfo GADT -> FuncInfo GetClass -> REQ Dec
-    genMemberClause
-      (FuncInfo (G  _gfcxt) (G  gfnm) (G  _gftv) (map getG  -> gfps))
-      (FuncInfo (GC _cfcxt) (GC cfnm) (GC _cftv) (map getGC ->  cfps))
-        = do params <- traverse (liftQ . newName)
-                         (zipWith const varNameList gfps)
-             let bJust = NormalB $ AppE (ConE 'Just)
-                   (TupE [ConE 'Dict, genParamTupleExp $ map VarE params])
-                 cJust = Clause [ConP gfnm (map VarP params)] bJust []
-                 cNothing = Clause [WildP] (NormalB $ ConE 'Nothing) []
-             pure $ FunD cfnm [cJust, cNothing]
+  where
+
+    genLiftErrLift :: Dec
+    genLiftErrLift = FunD cinst [Clause [] (NormalB $ VarE 'id) []]
+
+genErrPatterns :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass
+  -> REQ [Dec]
+genErrPatterns
+  (ClassInfo (C  _ccxt)  (C  ccnm) (C  cctv) (C ccetv) (C ccfd) ccfns (C ccinst))
+  (ClassInfo (G  _gcxt) (G   gnm) (G  _gtv) (G  _getv) (G  _gfd) gfns (G  ginst))
+  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC fname) cfns (GC cinst))
+    = undefined
+
+      -- Pattern for the general Type ...
+      -- patterns for the nduvidual constructors.
+
 -- repType :: forall d. (Eq d , Data d) => d -> d -> (forall b. Data b => b -> b)
 -- repType a b = \ c -> case testEquality (typeOf a) (typeOf c) of
 --                        Just Refl -> if c == a then b else c
@@ -336,11 +361,6 @@ genGADTGetInst
                        -- Nothing -> c
 
 {-
-genGADTGetInst :: (HasL '[GADT, GetClass] l ) => ClassInfo' l -> REQ Dec
-genGADTGetInst = undefined
-
-genTErrGetInst :: (HasL '[GetClass] l) => ClassInfo' l -> REQ Dec
-genTErrGetInst = undefined
 
 genErrPatterns :: (HasL '[GADT,GetClass] l)
   => ClassInfo' l -> REQ (ClassInfo' (Pattern ': l), [Dec])
