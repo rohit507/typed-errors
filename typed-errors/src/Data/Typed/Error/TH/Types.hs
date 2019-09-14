@@ -35,6 +35,8 @@ data TypedErrorRules = TypedErrorRules {
   , nameGetFunc :: ClassName -> Maybe FuncName
   , nameClassPattern :: ClassName -> Maybe PatternName
   , nameFuncPattern :: ClassName -> FuncName -> Maybe PatternName
+  , nameThrow :: ClassName -> FuncName -> Maybe FuncName
+  , nameWhile :: ClassName -> FuncName -> Maybe FuncName
   , dryRun :: Bool
   }
 
