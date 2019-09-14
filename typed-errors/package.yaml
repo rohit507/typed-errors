@@ -116,6 +116,7 @@ ghc-options:
   - -Wwarn=typed-holes
   - -Wwarn=unused-matches
   - -Wwarn=deprecations
+  - -Wwarn=unused-top-binds    # TODO :: Re-enable for cleaning
   - -Wwarn=unused-local-binds    # TODO :: Re-enable for cleaning
   - -Wwarn=unused-imports        # TODO :: Re-enable for cleaning
   - -Wwarn=redundant-constraints # TODO :: Re-enable for cleaning

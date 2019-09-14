@@ -9,14 +9,10 @@ import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.PprLib hiding ((<>))
 import Data.Data hiding (typeOf, typeRep,TypeRep)
 import Data.Type.Equality
--- import Type.Set
--- import Type.Set.Variant
--- import Type.Set.VariantF
 import Data.Constraint hiding (Class)
 import Data.Typed.Error.Internal
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.TH.Types
--- import Data.Typed.Error.MonoidalErr
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Lazy as Map
 import Type.Reflection
@@ -30,8 +26,9 @@ testAnn n = do
     (gi, gds) <- genGADTDecs ci
     teids <- genTErrClassInst ci gi
     grids   <- genGADTRewriteInst ci gi
-    (_gci, gcds) <- genGetClass ci
-    pure $ gds <> [teids,grids,gcds]
+    (gci, gcds) <- genGetClass ci gi
+    ggids <- genGADTGetInst ci gi gci
+    pure $ gds <> [teids,grids,gcds,ggids]
   case res of
     Left e -> do
       reportError $ show e
@@ -66,10 +63,6 @@ genClassInfo (ClassI d i) = case d of
       -> REQ (Name, FuncInfo Class)
     genFuncInfo t c (SigD nm typ)
       = let (a,b,ps) = extrFromTyp t c typ in do
-          -- liftQ . reportError . show . ppr $ a
-          -- liftQ . reportError . show $ a
-          -- liftQ . reportError . show $ b
-          -- liftQ . reportError . show . ppr $ ps
           pure . (nm,) $
             FuncInfo
               (C a)
@@ -87,7 +80,7 @@ genClassInfo (ClassI d i) = case d of
           (a, b, p) -> (fcxt <> a, ftv <> b, p)
     extrFromTyp ctv ccxt (AppT (AppT ArrowT p) t)
       = let (a,b,ps) = extrFromTyp ctv ccxt t in (a,b,p : ps)
-    extrFromTyp ctv _ccxt t = (mempty, ctv, [t])
+    extrFromTyp _ctv _ccxt t = (mempty, mempty, [t])
 
 genClassInfo i = throwNonClassInfo i
 
@@ -127,7 +120,7 @@ genGADTDecs (ClassInfo (C ctxt) (C nm) (C tv) (C etv) (C _fd) fn (C _inst))
         Nothing -> throwInvalidClassNameForGADT nm
         Just a  -> pure $ mkName a
       cons <- traverse (genGADTConst gName) fn
-      let dec = DataD mempty gName (tv <> [etv]) Nothing (snd <$> Map.elems cons) []
+      let dec = DataD (mempty) gName (tv <> [etv]) Nothing (snd <$> Map.elems cons) []
           ci = ClassInfo (G mempty) (G gName) (G ()) (G StarT) (G ()) (fst <$> cons) (G ())
       pure (ci,gName, dec)
 
@@ -143,10 +136,10 @@ genGADTDecs (ClassInfo (C ctxt) (C nm) (C tv) (C etv) (C _fd) fn (C _inst))
             Just e  -> pure (e, initDef [] p)
           unless (rType == VarT (tyVarName etv)) $ throwInvalidFuncType rType
           let fCtxt = ctxt <> fCxt
-              fi     = FuncInfo (G fCtxt) (G cName) (G ()) []
+              fi     = FuncInfo (G fCtxt) (G cName) (G ()) (map G ps)
               rType' = appTypes (ConT gName) (map (VarT . tyVarName) (tv <> [etv]))
               ftype  = appFuncTypes rType' ps
-              con    = ForallC ftv fCtxt $ GadtC [cName] [] ftype
+              con    = ForallC (tv <> ftv <> [etv]) fCtxt $ GadtC [cName] [] ftype
           pure (fi, con)
 
 varNameList :: [String]
@@ -224,43 +217,44 @@ genGADTRewriteInst
              pure $ Clause [pat] body []
 
 genParamTupleTyp :: [Type] -> Type
-genParamTupleTyp [] = ConT '()
+genParamTupleTyp [] = ConT ''()
 genParamTupleTyp (a:[]) = a
 genParamTupleTyp l = appTypes (TupleT $ length l) l
 
--- genParamTupleExp :: [Exp] -> Exp
--- genParamTupleExp [] = ConE '()
--- genParamTupleExp (a:[]) = a
--- genParamTupleExp l = TupE l
+genParamTupleExp :: [Exp] -> Exp
+genParamTupleExp [] = ConE '()
+genParamTupleExp (a:[]) = a
+genParamTupleExp l = TupE l
 
-genGetClass :: ClassInfo Class -> REQ (ClassInfo GetClass, Dec)
+genGetClass :: ClassInfo Class -> ClassInfo GADT -> REQ (ClassInfo GetClass, Dec)
 genGetClass
   (ClassInfo (C  ccxt) (C  cnm) (C ctv) (C cetv) (C _cfd) cfns (C _cinst))
+  (ClassInfo (G  gcxt) (G  gnm) (G gtv) (G getv) (G _gfd) gfns (G _ginst))
     = do cName :: Name <- ((\ f -> f $ nameBase cnm) . nameGetClass <$> ask) >>= \case
              Nothing -> do
                throwInvalidClassNameForGetClass cnm
              Just a  -> pure $ mkName a
          do
+           let params = map (VarT . tyVarName) ctv
+               cType = appTypes (ConT cnm) params
+               atv = tyVarName cetv
            ftv <- liftQ $ newName "f"
-           let atv = tyVarName cetv
+           let cns = [AppT cType (VarT ftv)] --, AppT cType (VarT atv)]
            (leName, leDec) <- genLiftErrDec (VarT ftv) (VarT atv)
-           funs <- traverse (genMemberSig (VarT ftv) (VarT atv)) cfns
+           funs <- traverse (genMemberSig cns (VarT ftv) (VarT atv)) cfns
            let fis = map fst funs
                fnDecs = map snd $ Map.elems funs
-               cns = (AppT (ConT cnm) (VarT ftv))
-                   : (AppT (ConT cnm) (VarT atv))
-                   : ccxt
                ci = ClassInfo
                     (GC cns)
                     (GC cName)
-                    (GC [])
+                    (GC $ map (VarT . tyVarName) ctv)
                     (GC (ftv,atv))
                     (GC ())
                     fis
                     (GC leName)
                tvs = map PlainTV [ftv, atv]
-               fd = FunDep [ftv] [atv]
-               dec = ClassD cns cName tvs [fd] (leDec:fnDecs)
+               fd  = FunDep [ftv] [atv]
+               dec = ClassD mempty cName (ctv <> tvs) [fd] (leDec:fnDecs)
            pure (ci, dec)
 
   where
@@ -273,9 +267,9 @@ genGetClass
         Just a -> pure $ mkName a
       pure . (fName,) $ SigD fName (AppT (AppT ArrowT ftv) atv)
 
-    genMemberSig :: Type -> Type
+    genMemberSig :: [Type] -> Type -> Type
       -> FuncInfo Class -> REQ (FuncInfo GetClass, Dec)
-    genMemberSig ftv atv
+    genMemberSig cns ftv _atv
       (FuncInfo (C cfcxt) (C cfnm) (C cftv) (map getC -> cfps))
         =  do fName <- (\ f -> (nameGetFunc f) (nameBase cnm) (nameBase cfnm))
                 <$> ask >>= \case
@@ -283,30 +277,65 @@ genGetClass
                     throwInvalidClassNameForGetClass cnm
                   Just a -> pure $ mkName a
               whileWithinFunction fName $
-                 let cfps' = map (gmapT (repType (VarT $ tyVarName cetv) atv))
-                                 $ initDef [] cfps
+                 let cfps' = initDef [] cfps
                      cxt' = ccxt <> cfcxt
                      cxt'' = genParamTupleTyp $ cxt'
-                     dTyp = AppT (ConT 'Dict) cxt''
+                     dTyp = AppT (ConT ''Dict) cxt''
                      pTyp = genParamTupleTyp cfps'
-                     mType = AppT (ConT ''Maybe) (AppT (AppT (TupleT 2) dTyp) pTyp)
+                     -- mType = AppT (ConT ''Maybe) (AppT (AppT (TupleT 2) dTyp) pTyp)
+                     mType = AppT (ConT ''Maybe) (appTypes (ConT gnm) cns)
                      tpType = AppT (AppT ArrowT ftv) mType
-                     fnType = ForallT (initDef [] cftv) [] tpType
-                     fi = FuncInfo (GC cxt') (GC fName) (GC []) (map GC cfps')
-                  in pure (fi, SigD fName fnType)
+                     fnType = ForallT [] cns tpType
+                     fi = FuncInfo (GC ccxt) (GC fName) (GC []) (map GC cfps')
+                  in pure (fi, SigD fName tpType)
 
-repType :: forall d. (Eq d , Data d) => d -> d -> (forall b. Data b => b -> b)
-repType a b = \ c -> case testEquality (typeOf a) (typeOf c) of
-                       Just Refl -> if c == a then b else c
-                       Nothing -> c
+genGADTGetInst :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass -> REQ Dec
+genGADTGetInst
+  (ClassInfo (C  _ccxt)  (C  ccnm) (C  cctv) (C ccetv) (C ccfd) ccfns (C ccinst))
+  (ClassInfo (G  _gcxt) (G   gnm) (G  _gtv) (G  _getv) (G  _gfd) gfns (G  ginst))
+  (ClassInfo (GC _gccxt) (GC  cnm) (GC  ctv) (GC (ftv,atv)) (GC _cfd) cfns (GC cinst))
+    = whileBuildingClassInst (mkName "Get GADT") $ do
+       funs <- (Map.mergeA
+               (Map.traverseMissing $ \ k _ ->
+                   throwExtraFuncInfo k (someTypeRep $ typeRep @TypedError))
+               (Map.traverseMissing $ \ k _ ->
+                   throwMissingFuncInfo k (someTypeRep $ typeRep @TypedError))
+               (Map.zipWithAMatched $ \ _ a b -> genMemberClause a b)
+               gfns cfns)
+       let decs = genLiftErrLift : Map.elems funs
+           ftv' = appTypes (ConT gnm) (ctv <> [VarT atv])
+           iTyp = appTypes (ConT cnm) (ctv <> [ftv', VarT atv])
+           cons = map (\ n -> appTypes (ConT ccnm) (ctv <> [n])) [ftv', VarT atv]
+       pure $ InstanceD Nothing cons iTyp decs
 
+  where
+
+    genLiftErrLift :: Dec
+    genLiftErrLift = FunD cinst [Clause [] (NormalB $ VarE 'rewriteError) []]
+
+
+    genMemberClause :: FuncInfo GADT -> FuncInfo GetClass -> REQ Dec
+    genMemberClause
+      (FuncInfo (G  _gfcxt) (G  gfnm) (G  _gftv) (map getG  -> gfps))
+      (FuncInfo (GC _cfcxt) (GC cfnm) (GC _cftv) (map getGC ->  cfps))
+        = do params <- traverse (liftQ . newName)
+                         (zipWith const varNameList gfps)
+             let bJust = NormalB $ AppE (ConE 'Just)
+                   (TupE [ConE 'Dict, genParamTupleExp $ map VarE params])
+                 cJust = Clause [ConP gfnm (map VarP params)] bJust []
+                 cNothing = Clause [WildP] (NormalB $ ConE 'Nothing) []
+             pure $ FunD cfnm [cJust, cNothing]
+-- repType :: forall d. (Eq d , Data d) => d -> d -> (forall b. Data b => b -> b)
+-- repType a b = \ c -> case testEquality (typeOf a) (typeOf c) of
+--                        Just Refl -> if c == a then b else c
+--                        Nothing -> c
+
+-- repTypeMap :: forall d. (Ord d , Data d) => Map d d -> (forall b. Data b => b -> b)
+-- repTypeMap m = \ c -> case testEquality (typeRep @d) (typeOf c) of
+--                        Just Refl -> fromMaybe c (Map.lookup c m)
+                       -- Nothing -> c
 
 {-
-
-
-genGetClass :: (HasL '[Class] l) => ClassInfo' l -> REQ (ClassInfo' (GetClass ': l), Dec)
-genGetClass = undefined
-
 genGADTGetInst :: (HasL '[GADT, GetClass] l ) => ClassInfo' l -> REQ Dec
 genGADTGetInst = undefined
 
@@ -320,78 +349,4 @@ genErrPatterns = undefined
 genThrowFuncs ::  (HasL '[Class] l) => ClassInfo' l -> REQ [Dec]
 genThrowFuncs = undefined
 
-
-
-convertClassInfo :: forall e. (TypedErrErr e
-                             ) => Info -> Either e ErrorClass
-convertClassInfo (ClassI d _) = convertClassDec d
-convertClassInfo a = Left . notProvidedClass $ Left a
-
-convertClassDec :: (TypedErrErr e) => Dec -> Either e ErrorClass
-convertClassDec (ClassD ctxt name tyVars funDeps decs)
-  = first (withinClass name) $ do
-      (fTyVars, eTyVar) <- case (,) <$> initMay tyVars <*> lastMay tyVars of
-        Nothing -> Left missingErrorTyVar
-        Just  r -> pure r
-      let ename = getTyVarName eTyVar
-      traverse_ (validateFunDep ename) funDeps
-      decs' <- traverse (convertSig ename) decs
-      pure $ ErrorClass ctxt name fTyVars eTyVar funDeps decs'
-convertClassDec d = Left . notProvidedClass $ Right d
-
-
-validateFunDep :: (TypedErrErr e) => Name -> FunDep -> Either e ()
-validateFunDep etv fd@(FunDep is ds)
-  = case elem etv is || elem etv ds of
-     False -> skip
-     True -> Left $ invalidFundep etv fd
-
-convertSig :: (TypedErrErr e) => Name -> Dec -> Either e ErrorFunc
-convertSig etv (SigD name typ)
-  = first (withinSig name) $ convertType etv name typ
-convertSig _ s = Left $ notFunctionSig s
-
-convertType :: (TypedErrErr e) => Name -> Name -> Type -> Either e ErrorFunc
-convertType etv name (ForallT _ _ typ@ForallT{})
-   -- Method sigs in classes can be wrapped in two layers of 'ForAllT.'
-   -- We elide the layer that corresponds to class constraints, since that
-   -- information is stored in `ErrorClass`.
-  = convertType etv name typ
-convertType etv name (ForallT tyVars ctxt typ)
-  = do let params = convertParams typ
-       case lastMay params of
-         Nothing -> Left $ functionWithNoParams
-         Just (VarT e) -> case e == etv of
-           True -> skip
-           False -> Left $ invalidFinalParam etv (VarT e)
-         Just a -> Left $ invalidFinalParam etv a
-       pure $ ErrorFunc name tyVars ctxt params
-convertType _ _ a = Left $ invalidFuncType a
-
-convertParams :: Type -> [Type]
-convertParams (AppT (AppT ArrowT a) b) = a : convertParams b
-convertParams a = [a]
-
-getTyVarName :: TyVarBndr -> Name
-getTyVarName (PlainTV a) = a
-getTyVarName (KindedTV a _) = a
-
-deriveErrorTypes :: Name -> Q [Dec]
-deriveErrorTypes n = do
-  classData <- reify n
-  reportWarning . show @(Either TypedErrErrT ErrorClass)
-    $ convertClassInfo classData
-  pure []
-
-
-
--- TODO ::
---   - Write code for error class.
---   - Generate the functor version of the error type
---     - Generate the instance for that error type
---     - Generate the instance for when the functor is a member of Error\
---     - Generate Eq1, Ord1, Show1, Eq, Ord, Show, Generic, NFData, NFData1
---       Functor, Foldable, Traversable and Typeable instances for each type.
---   - Generate the pattern synonyms
---   - Generate the throw/while functions for the class.
 -}
