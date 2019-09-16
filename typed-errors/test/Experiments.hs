@@ -29,8 +29,14 @@ class (Ord a, Monoid b) => CrazyErr a b c e where
   err2 :: forall d. (Ord d) => a -> b -> c d -> e
   err3 :: forall m. (InternalErr e) => (c m -> Maybe m) -> c b -> c a -> e -> e
 
-makeErrClassHelpers defaultTypedErrorRules ''CrazyErr
-makeErrClassHelpers defaultTypedErrorRules ''InternalErr
+class ConversionErr i a e where
+  invalidMsgOp     :: (Show msgOp ) => Text -> msgOp -> e
+  invalidTermOp    :: (Show termOp) => Text -> termOp -> e
+  invalidParamInit :: (Show pInit ) => Text -> pInit -> e
+
+-- makeErrClassHelpers defaultTypedErrorRules ''CrazyErr
+makeErrClassHelpers defaultTypedErrorRules ''ConversionErr
+-- makeErrClassHelpers defaultTypedErrorRules ''InternalErr
 
 main :: IO ()
 main = print "It compiled!"
