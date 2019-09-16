@@ -4,7 +4,6 @@
 module Main where
 
 import Intro hiding (Type)
-import Data.Typed.Error.TH
 import Data.Typed.Error
 import Language.Haskell.TH
 import Type.Reflection
@@ -30,8 +29,8 @@ class (Ord a, Monoid b) => CrazyErr a b c e where
   err2 :: forall d. (Ord d) => a -> b -> c d -> e
   err3 :: forall m. (InternalErr e) => (c m -> Maybe m) -> c b -> c a -> e -> e
 
-testAnn ''CrazyErr
--- testAnn ''InternalErr
+makeErrClassHelpers ''CrazyErr
+makeErrClassHelpers ''InternalErr
 
 main :: IO ()
 main = print "It compiled!"

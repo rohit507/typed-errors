@@ -20,6 +20,10 @@ import Text.Show
 class CCIntE
 class FCIntE
 
+instance CCIntE
+instance FCIntE
+
+
 -- | Internal Error Type used when generating errors.
 --   Also kinda a showcase of what a manual instance should look like
 class (CCIntE) => InternalErr e where

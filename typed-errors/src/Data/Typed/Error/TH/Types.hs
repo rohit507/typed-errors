@@ -10,15 +10,15 @@ import Intro hiding (Type)
 import Language.Haskell.TH
 import Data.Typed.Error.TH.InternalErr
 import Data.Typed.Error.MonoidalErr
-import Data.Typed.Error
+import Data.Typed.Error.Internal
 import Data.Char
-import Type.Reflection
-import qualified Data.Map as Map
-import qualified Data.Map.Merge.Lazy as Map
+-- import Type.Reflection
+-- import qualified Data.Map as Map
+-- import qualified Data.Map.Merge.Lazy as Map
 
 
-instance CCIntE
-instance FCIntE
+-- instance CCIntE
+-- instance FCIntE
 
 type ClassName = String
 type GADTName = String
@@ -50,8 +50,8 @@ defTER = TypedErrorRules {
   , nameClassPattern = defNameClassPattern
   , nameFuncPattern = defNameFuncPattern
   , nameThrow = defNameThrow
-  , nameWhile = defNamwWhile
-  , dryRun = True
+  , nameWhile = defNameWhile
+  , dryRun = False
   }
 
 defNameClassPattern :: ClassName -> Maybe PatternName
@@ -78,13 +78,13 @@ defNameGetFunc :: ClassName -> Maybe FuncName
 defNameGetFunc (s : ls) = Just $ "from" <> (toUpper s : ls)
 defNameGetFunc [] = Nothing
 
-defNameThrow :: ClassName -> Maybe FuncName
-defNameThrow (s : ls) = Just $ "throw" <> (toUpper s : ls)
-defNameThrow [] = Nothing
+defNameThrow :: ClassName -> FuncName -> Maybe FuncName
+defNameThrow _ (s : ls) = Just $ "throw" <> (toUpper s : ls)
+defNameThrow _ [] = Nothing
 
-defNameWhile :: ClassName -> Maybe FuncName
-defNameWhile (s : ls) = Just $ "while" <> (toUpper s : ls)
-defNameWhile [] = Nothing
+defNameWhile :: ClassName -> FuncName -> Maybe FuncName
+defNameWhile _ (s : ls) = Just $ "while" <> (toUpper s : ls)
+defNameWhile _ [] = Nothing
 
 type REQErr = TypedError '[InternalErr,MonoidalErr]
 

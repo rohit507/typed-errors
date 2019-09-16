@@ -7,3 +7,7 @@ import Data.Typed.Error.Internal as P
   , HasError(..)
   , convertError
   )
+
+import Data.Typed.Error.TH as P
+  ( makeErrClassHelpers
+  )
