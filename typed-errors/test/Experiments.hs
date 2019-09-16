@@ -29,8 +29,8 @@ class (Ord a, Monoid b) => CrazyErr a b c e where
   err2 :: forall d. (Ord d) => a -> b -> c d -> e
   err3 :: forall m. (InternalErr e) => (c m -> Maybe m) -> c b -> c a -> e -> e
 
-makeErrClassHelpers ''CrazyErr
-makeErrClassHelpers ''InternalErr
+makeErrClassHelpers defaultTypedErrorRules ''CrazyErr
+makeErrClassHelpers defaultTypedErrorRules ''InternalErr
 
 main :: IO ()
 main = print "It compiled!"

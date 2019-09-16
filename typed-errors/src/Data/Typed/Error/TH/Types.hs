@@ -31,27 +31,33 @@ data TypedErrorRules = TypedErrorRules {
     -- | constructors without a matching name will not be produced.
   , nameGADTCons :: ClassName -> FuncName -> Maybe GADTConsName
   , nameGetClass :: ClassName -> Maybe ClassName
-  , nameGetLift :: ClassName -> Maybe FuncName
   , nameGetFunc :: ClassName -> Maybe FuncName
   , nameClassPattern :: ClassName -> Maybe PatternName
   , nameFuncPattern :: ClassName -> FuncName -> Maybe PatternName
   , nameThrow :: ClassName -> FuncName -> Maybe FuncName
   , nameWhile :: ClassName -> FuncName -> Maybe FuncName
   , dryRun :: Bool
+  , skipExistingThrow :: Bool
+  , skipExistingWhile :: Bool
   }
+
+
+defaultTypedErrorRules :: TypedErrorRules
+defaultTypedErrorRules = defTER
 
 defTER :: TypedErrorRules
 defTER = TypedErrorRules {
     nameGADT = defNameGADT
   , nameGADTCons = defNameGADTCons
   , nameGetClass = defNameGetClass
-  , nameGetLift  = defNameGetLift
   , nameGetFunc  = defNameGetFunc
   , nameClassPattern = defNameClassPattern
   , nameFuncPattern = defNameFuncPattern
   , nameThrow = defNameThrow
   , nameWhile = defNameWhile
   , dryRun = False
+  , skipExistingThrow = True
+  , skipExistingWhile = True
   }
 
 defNameClassPattern :: ClassName -> Maybe PatternName
@@ -174,7 +180,7 @@ type family GC (a :: Context) :: * where
   GC 'TyVars   = [Type]
   GC 'ErrTyVar = (Name, Name)
   GC 'FunDeps  = Name
-  GC 'InstDecs = Name
+  GC 'InstDecs = ()
   GC 'Knd      = ()
   GC 'Param    = Type
 
