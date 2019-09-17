@@ -22,6 +22,7 @@ dependencies:
   - containers
   - constraints >= 0.11 && < 1
   - type-sets
+  - syb
 
 # custom-setup:
 #   dependencies:

@@ -7,7 +7,7 @@ import Intro hiding (Type)
 import Language.Haskell.TH
 -- import Language.Haskell.TH.Syntax
 import Language.Haskell.TH.PprLib hiding ((<>))
--- import Data.Data hiding (typeOf, typeRep,TypeRep)
+import Data.Data hiding (typeOf, typeRep,TypeRep)
 -- import Data.Type.Equality
 -- import Data.Constraint hiding (Class)
 import Data.Typed.Error.Internal
@@ -16,7 +16,7 @@ import Data.Typed.Error.TH.Types
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Lazy as Map
 import Type.Reflection
-
+import Data.Generics.Schemes
 
 makeErrClassHelpers :: TypedErrorRules -> Name -> Q [Dec]
 makeErrClassHelpers ter n = do
@@ -41,6 +41,11 @@ makeErrClassHelpers ter n = do
       if (dryRun ter)
       then (reportWarning . show . sep . map ppr $ ds) *> pure []
       else pure ds
+
+liftSYB :: forall a b. (Typeable a, Data b) => (a -> a) -> b -> b
+liftSYB f b = case eqTypeRep (typeRep @a) (typeRep @b) of
+  Nothing -> b
+  Just HRefl -> f b
 
 genClassInfo :: Info -> REQ (ClassInfo Class)
 genClassInfo (ClassI d i) = case d of
@@ -68,6 +73,7 @@ genClassInfo (ClassI d i) = case d of
       -> REQ (Name, FuncInfo Class)
     genFuncInfo t c (SigD nm typ)
       = let (a,b,ps) = extrFromTyp t c typ in do
+          -- liftQ $ reportWarning . show $ (a,b,ps)
           pure . (nm,) $
             FuncInfo
               (C a)
@@ -157,7 +163,7 @@ varNameList = map (:[]) letters <> [ p : r | p <- letters, r <- varNameList]
 
 genTErrClassInst :: ClassInfo Class -> ClassInfo GADT -> REQ Dec
 genTErrClassInst
-  (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C _cetv) (C _cfd) cfns (C _cinst))
+  (ClassInfo (C  ccxt) (C  cnm) (C  ctv) (C cetv) (C _cfd) cfns (C _cinst))
   (ClassInfo (G _gcxt) (G _gnm) (G _gtv) (G _getv) (G _gfd) gfns (G _ginst))
     = whileBuildingClassInst (mkName "TypedError p") $ do
            funs <- (Map.mergeA
@@ -168,10 +174,17 @@ genTErrClassInst
               (Map.zipWithAMatched $ \ _ a b -> genMemberFunc a b)
               cfns gfns)
            tyVar <- liftQ $ VarT <$> newName "p"
-           let classT = (ConT cnm)
+           let tepvar = (AppT (ConT ''TypedError) tyVar)
+               repetv :: Type -> Type
+               repetv (VarT e)
+                  | e == tyVarName cetv = tepvar
+                  | otherwise = (VarT e)
+               repetv e = e
+               nccxt = everywhere (liftSYB repetv) ccxt
+               classT = (ConT cnm)
                instT = appTypes classT $ map (VarT . tyVarName) ctv
-               icxt = (AppT (AppT (ConT ''HasError) instT) tyVar) : ccxt
-               typ = AppT instT (AppT (ConT ''TypedError) tyVar)
+               icxt = (AppT (AppT (ConT ''HasError) instT) tyVar) : nccxt
+               typ = AppT instT tepvar
            pure $ InstanceD Nothing icxt typ (Map.elems funs)
   where
 
@@ -307,7 +320,7 @@ genTypErrGetInst
 genErrPatterns :: ClassInfo Class -> ClassInfo GADT -> ClassInfo GetClass
   -> REQ [Dec]
 genErrPatterns
-  (ClassInfo (C  ccxt)  (C  cnm) (C  ctv) (C _cetv) (C _cfd) ccfns (C _ccinst))
+  (ClassInfo (C  ccxt)  (C  cnm) (C  ctv) (C  cetv) (C _cfd) ccfns (C _ccinst))
   (ClassInfo (G  _gcxt) (G   gnm) (G _gtv) (G _getv) (G _gfd) gfns (G  _ginst))
   (ClassInfo (GC _gccxt) (GC  gcnm)
     (GC _gctv) (GC (ftv,atv)) (GC gcfname) _gcfns (GC _leName))
@@ -328,6 +341,12 @@ genErrPatterns
       pVar <- liftQ $ newName "p"
       xVar <- liftQ $ newName "x"
       let leType = AppT (ConT ''TypedError) (VarT pVar)
+          repetv :: Type -> Type
+          repetv (VarT e)
+             | e == tyVarName cetv = leType
+             | otherwise = (VarT e)
+          repetv e = e
+          nccxt = everywhere (liftSYB repetv) ccxt
           ctvType =  (map (VarT . tyVarName) ctv)
           clsCns = appTypes (ConT cnm) ctvType
           gCns = appTypes (ConT gnm) ctvType
@@ -339,7 +358,7 @@ genErrPatterns
           synArgs = PrefixPatSyn [xVar]
           patPat = ViewP (AppTypeE (VarE 'fromError) clsCns)
                          (ConP 'Just [VarP xVar])
-          patSynTyp = ForallT (ctv <> [PlainTV pVar]) (hasErr : ccxt) $ ForallT [] ccxt $
+          patSynTyp = ForallT (ctv <> [PlainTV pVar]) (hasErr : nccxt) $ ForallT [] nccxt $
             AppT (AppT ArrowT (AppT gCns leType)) leType
       pure [ PatSynSigD pName patSynTyp
            , PatSynD pName synArgs synDir patPat]
