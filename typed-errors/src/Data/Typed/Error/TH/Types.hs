@@ -141,6 +141,18 @@ data FuncInfo (f :: Context -> *) = FuncInfo {
   }
 
 
+-- type family C (a :: Context) :: * where
+--   C 'Ctxt     = Map String Name -> Cxt
+--   C 'ClName   = Name
+--   C 'FnName   = Name
+--   C 'TyVars   = [String]
+--   C 'ErrTyVar = String
+--   C 'FunDeps  = Map String Name -> [FunDep]
+--   C 'InstDecs = [InstanceDec]
+--   C 'Knd      = ()
+--   C 'Param    = Map String Name -> Type
+
+
 type family C (a :: Context) :: * where
   C 'Ctxt     = Cxt
   C 'ClName   = Name
